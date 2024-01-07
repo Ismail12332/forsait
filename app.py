@@ -1,3 +1,4 @@
+import os
 from flask import Flask, render_template, request, redirect, url_for, session,jsonify
 from pymongo import MongoClient
 from passlib.hash import bcrypt
@@ -22,7 +23,7 @@ def create_app():
     app = Flask(__name__, template_folder='templates')
     CORS(app, supports_credentials=True)
     app.secret_key = secrets.token_hex(32)
-    client = MongoClient("mongodb://localhost:27017")
+    client = MongoClient(os.getenv("MONGODB_URI"))
     app.db = client.my_database
     users_collection = app.db.users
     projects_collection = app.db.projects
