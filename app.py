@@ -161,7 +161,38 @@ def create_app():
         return jsonify({"status": "success", "project": project})
 
 
+    #Дабовление и удаление записей в стандартные разделы разделах
+    @app.route("/edit_project/<project_id>/add_step_standard", methods=["POST"])
+    def add_step_standard(project_id):
+        try:
+            project_id = ObjectId(project_id)
+        except Exception as e:
+            return jsonify({"status": "error", "message": "Invalid project_id"}), 400
+        
+        section_name = request.form.get("section_name")
+        subsection_name = request.form.get("subsection_name")
+        step_description = request.form.get("step_description")
 
+        # Добавьте ваш код для обработки данных и добавления шага в соответствующий подраздел
+        print(section_name,subsection_name, step_description)
+
+        updated_project = app.db.projects.find_one_and_update(
+            {"_id": project_id, f"{section_name}.name": subsection_name},
+            {"$push": {f"{section_name}.$.subsections": {"step_description": step_description}}}
+        )
+
+        updated_project = app.db.projects.find_one({"_id": project_id})
+        updated_project["_id"] = str(updated_project["_id"])
+        print('твой проект',updated_project)
+        return jsonify({
+            "status": "success",
+            "message": "Step added successfully",
+            "step_description": step_description,
+            "section_name": section_name,
+            "subsection_name": subsection_name,
+            "updated_project": updated_project
+        })
+        
     #Дабовление и удаление записей в разделах
     @app.route("/edit_project/<project_id>/add_step", methods=["POST"])
     def add_step(project_id):
@@ -333,6 +364,35 @@ def create_app():
         updated_project['_id'] = str(updated_project['_id'])
         
         return jsonify({"status": "success", "message": "Section added successfully", "updated_project": updated_project})
+    
+    #Добавление подраздела стандартного
+    @app.route("/edit_project/<project_id>/add_subsection_standard", methods=["POST"])
+    def add_subsection_standard(project_id):
+        try:
+            project_id = ObjectId(project_id)
+        except Exception as e:
+            return "Invalid project_id", 400
+        
+        section_name = request.form.get("section_name")
+        subsection_name = request.form.get("subsection_name")
+
+        print(section_name, subsection_name)
+        
+        try:
+            result = app.db.projects.update_one(
+                {"_id": project_id},
+                {"$push": {section_name: {"name": subsection_name, "subsections": []}}}
+            )
+            if result.modified_count == 0:
+                return "Section not found in the project", 404
+        except Exception as e:
+            print("Error:", e)
+            return "An error occurred", 500
+        
+        updated_project = app.db.projects.find_one({"_id": project_id})
+        updated_project['_id'] = str(updated_project['_id'])
+
+        return jsonify({"status": "success", "message": "Hello bithes", "project": updated_project})
 
     #--удаление подраздела
     @app.route("/edit_project/<project_id>/delete_subsection/<section_name>/<subsection_name>", methods=["POST"])
