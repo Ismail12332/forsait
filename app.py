@@ -11,6 +11,8 @@ from b2sdk.v2 import *
 import secrets
 import uuid
 import pprint
+from openai import OpenAI
+import traceback
 
 load_dotenv()
 
@@ -30,6 +32,7 @@ def create_app():
     app.db = client.my_database
     users_collection = app.db.users
     projects_collection = app.db.projects
+    client = OpenAI(os.getenv("SECRET_KEY_OPENAI"))
 
     # Создание клиента Backblaze B2
     info = InMemoryAccountInfo()
@@ -718,6 +721,32 @@ def create_app():
 
         return jsonify({"status": "success", "message": "Subsection added successfully", "project": updated_project})
 
+
+    #чат джипити
+    @app.route('/edit_project/<project_id>/get-gpt-recommendations', methods=['POST'])
+    def get_gpt_recommendations(project_id):
+        data = request.json
+        section = data['section']
+        subsection = data['subsection']
+        prompt = f"Пожалуйста, дайте рекомендации для осмотра яхты для раздела {section}, подраздела {subsection}. Что стоит осмотреть и проверить при осмотре {subsection}?"
+
+        try:
+            response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "Ты помощник клиента в осмотре яхты указываешь на то что стоит проверить и как лучше проверять"},
+                {"role": "user", "content": prompt}
+            ]
+            )
+            print(response)
+            recommendations = response.choices[0].message.content.strip()
+            return jsonify({'recommendations': recommendations})
+        except Exception as e:
+            print(f"Произошла ошибка: {e}")
+            traceback.print_exc()
+            return jsonify({'error': str(e)}), 500
+            
+    
     #--удаление подраздела
     @app.route("/edit_project/<project_id>/delete_subsection/<section_name>/<subsection_name>", methods=["POST"])
     def delete_subsection(project_id, section_name, subsection_name):
