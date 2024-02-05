@@ -1,13 +1,15 @@
-import os
-from flask import Flask, render_template, request, redirect, url_for, session,jsonify
+from flask import Flask, render_template, request, redirect, url_for, session,jsonify,abort
 from pymongo import MongoClient
 from passlib.hash import bcrypt
 from bson import ObjectId
 from datetime import datetime
 from dotenv import load_dotenv
 from flask_cors import CORS,cross_origin
-from werkzeug.utils import secure_filename
+from urllib.parse import quote
+from b2sdk.v2 import *
 import secrets
+import uuid
+import pprint
 
 load_dotenv()
 
@@ -23,10 +25,22 @@ def create_app():
     app = Flask(__name__, template_folder='templates')
     CORS(app, supports_credentials=True)
     app.secret_key = secrets.token_hex(32)
-    client = MongoClient(os.getenv("MONGODB_URI"))
+    client = MongoClient("mongodb://localhost:27017")
     app.db = client.my_database
     users_collection = app.db.users
     projects_collection = app.db.projects
+
+    # Создание клиента Backblaze B2
+    info = InMemoryAccountInfo()
+    b2_api = B2Api(info)
+    application_key_id = '4ad4332a1370'
+    application_key = '004787d4a1ca0ed42646b85d3f9cf9523f3c5847a4'
+    b2_api.authorize_account("production", application_key_id, application_key)
+
+    # Получение бакета (папки) для хранения изображений
+    bucket_name = 'Survzila'
+    bucket = b2_api.get_bucket_by_name(bucket_name)
+
 
 
     @app.route("/", methods=["GET", "POST"])
@@ -46,7 +60,7 @@ def create_app():
 
             return jsonify({'status': 'error', 'message': 'Incorrect username or password.'}), 401  # Возвращаем JSON-ответ
 
-        return render_template("index.html")
+        return render_template("login.html")
 
     #выход
     @app.route("/logout")
@@ -124,7 +138,33 @@ def create_app():
             "city": city,
             "phone": phone,
             "post": post,
-            "sections": [],
+            "sections": {
+                    "introduction": {"gen_info": {"images": [],"steps": []},"certification": {"images": [],"steps": []},"purpose_of_survey": {"images": [],"steps": []},"circumstances_of_survey": {"images": [],"steps": []},"report_file_no": {"images": [],"steps": []},"surveyor_qualifications": { "images": [],"steps": []},"intended_use": {"images": [],"steps": []},
+                    },
+                    "hull": { "layout_overview": {"images": [],"steps": []},"design": {"images": [],"steps": []},"deck": {"images": [],"steps": []},"structural_members": {"images": [],"steps": []},"bottom_paint": {"images": [],"steps": []},"blister_comment": {"images": [],"steps": []},"transom": {"images": [],"steps": []},
+                    },
+                    "above": { "deck_floor_plan": {"images": [],"steps": []},"anchor_platform": {"images": [],"steps": []},"toe_rails": {"images": [],"steps": []},"mooring_hardware": {"images": [],"steps": []},"hatches": {"images": [],"steps": []},"exterior_seating": {"images": [],"steps": []},"cockpit_equipment": {"images": [],"steps": []},"ngine_hatch": {"images": [],"steps": []},"above_draw_water_line": {"images": [],"steps": []},"boarding_ladder": {"images": [],"steps": []},"swim_platform": {"images": [],"steps": []},
+                    },
+                    "below": { "below_draw_water": {"images": [],"steps": []},"thru_hull_strainers": {"images": [],"steps": []},"transducer": {"images": [],"steps": []},"sea_valves": {"images": [],"steps": []},"sea_strainers": {"images": [],"steps": []},"trim_tabs": {"images": [],"steps": []},"note": {"images": [],"steps": []},
+                    },
+                    "cathodic": { "bonding_system": {"images": [],"steps": []},"anodes": {"images": [],"steps": []},"lightning_protection": {"images": [],"steps": []},"additional_remarks": {"images": [],"steps": []},
+                    },
+                    "helm": { "helm_station": {"images": [],"steps": []},"throttle_shift_controls": {"images": [],"steps": []},"engine_room_blowers": {"images": [],"steps": []},"engine_status": {"images": [],"steps": []},"other_electronics_controls": {"images": [],"steps": []},
+                    },
+                    "cabin": { "entertainment_berthing": {"images": [],"steps": []},"interior_lighting": {"images": [],"steps": []},"galley_dinette": {"images": [],"steps": []},"water_closets": {"images": [],"steps": []},"climate_control": {"images": [],"steps": []},
+                    },
+                    "electrical": { "dc_systems_type": {"images": [],"steps": []},"ac_systems": {"images": [],"steps": []},"generator": {"images": [],"steps": []},
+                    },
+                    "inboard": { "engines": {"images": [],"steps": []},"serial_numbers": {"images": [],"steps": []},"engine_hours": {"images": [],"steps": []},"other_note": {"images": [],"steps": []},"reverse_gears": {"images": [],"steps": []},"shafting_propellers": {"images": [],"steps": []},
+                    },
+                    "steering": { "manufacture": {"images": [],"steps": []},"steering_components": {"images": [],"steps": []},
+                    },
+                    "tankage": { "fuel": {"images": [],"steps": []},"potable_water_system": {"images": [],"steps": []},"holding_tank_black_water": {"images": [],"steps": []},
+                    },
+                    "safety": { "navigational_lights": {"images": [],"steps": []},"life_jackets": {"images": [],"steps": []},"throwable_pfd": {"images": [],"steps": []},"visual_distress_signals": {"images": [],"steps": []},"sound_devices": {"images": [],"steps": []},"uscg_placards": {"images": [],"steps": []},"flame_arrestors": {"images": [],"steps": []},"engine_ventilation": {"images": [],"steps": []},"ignition_protection": {"images": [],"steps": []},"inland_navigational_rule_book": {"images": [],"steps": []},"waste_management_plan": {"images": [],"steps": []},"fire_fighting_equipment": {"images": [],"steps": []},"bilge_pumps": {"images": [],"steps": []},"ground_tackle_windlass": {"images": [],"steps": []},"auxiliary_safety_equipment": {"images": [],"steps": []},
+                    },
+                },
+            "sectionse": [],
             "vessel_name": vessel_name,
             "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "user_id": user_id
@@ -160,6 +200,160 @@ def create_app():
 
         return jsonify({"status": "success", "project": project})
 
+    #Добавление изображения для подразделов стандартных разделов
+    @app.route('/edit_project/upload_image/<project_id>/<section_name>/<subsection_name>', methods=['POST'])
+    def upload_image(project_id, section_name, subsection_name):
+        try:
+            project_id = ObjectId(project_id)
+        except Exception as e:
+            return jsonify({"status": "error", "message": "Invalid project_id"}), 400
+        
+        if 'file' not in request.files:
+            return jsonify({"status": "error", "message": "No file part"}), 400
+
+        file = request.files['file']
+
+        if file.filename == '':
+            return jsonify({"status": "error", "message": "No selected file"}), 400
+
+        if file:
+            file_data = file.read()
+            file_name = file.filename
+            b2_file_name = str(uuid.uuid4())
+
+            bucket.upload_bytes(
+                data_bytes=file_data,
+                file_name=b2_file_name
+            )
+
+            file_info = {
+                'file_name': file_name,
+                'b2_file_name': b2_file_name,
+                'b2_url': 'https://f004.backblazeb2.com/file/Survzila/' + quote(b2_file_name)
+            }
+            app.db.files.insert_one(file_info)
+            print(section_name, subsection_name)
+
+            # Обновление проекта с добавлением информации о загруженном изображении
+            app.db.projects.update_one(
+                {"_id": project_id, f"{section_name}.name": subsection_name},
+                {"$push": {f"{section_name}.$.subsections": {"image_url": file_info['b2_url']}}}
+            )
+
+            updated_project = app.db.projects.find_one({"_id": project_id})
+            updated_project["_id"] = str(updated_project["_id"])
+            
+            return jsonify({
+                "status": "success",
+                "message": "Image uploaded successfully",
+                "image_url": file_info['b2_url'],
+                "updated_project": updated_project
+            }), 200
+        else:
+            return jsonify({"status": "error", "message": "Failed to upload file"}), 400
+        
+
+    #delite
+    @app.route('/edit_project/<project_id>/<section_name>/<subsection_name>/delete_images', methods=['POST'])
+    def delete_images(project_id, section_name, subsection_name):
+        try:
+            project_id = ObjectId(project_id)
+        except Exception as e:
+            return jsonify({"status": "error", "message": "Invalid project_id"}), 400
+        
+        image_url = request.json.get('image_url')
+
+            # Удаление изображения из базы данных проекта
+        result = app.db.projects.update_one(
+            {"_id": project_id, f"{section_name}.name": subsection_name},
+            {"$pull": {f"{section_name}.$.subsections": {"image_url": image_url}}}
+        )
+        updated_project = app.db.projects.find_one({"_id": project_id})
+        updated_project["_id"] = str(updated_project["_id"])
+
+        if result.modified_count > 0:
+            return jsonify({"status": "success", "message": "Image deleted successfully","updated_project": updated_project}), 200
+        else:
+            return jsonify({"status": "error", "message": "Failed to delete image"}), 400
+
+        
+
+    @app.route('/edit_project/<project_id>/<section_name>/<subsection_name>/add_image', methods=['POST'])
+    def add_image(project_id,section_name, subsection_name):
+        try:
+            project_id = ObjectId(project_id)
+        except Exception as e:
+            return jsonify({"status": "error", "message": "Invalid project_id"}), 400
+
+        # Получение файла из запроса
+        if 'file' not in request.files:
+            return jsonify({"status": "error", "message": "No file part"}), 400
+
+        file = request.files['file']
+
+        if file.filename == '':
+            return jsonify({"status": "error", "message": "No selected file"}), 400
+
+        if file:
+            file_data = file.read()
+            file_name = file.filename
+            b2_file_name = str(uuid.uuid4())
+
+            bucket.upload_bytes(
+                data_bytes=file_data,
+                file_name=b2_file_name
+            )
+
+            file_info = {
+                'file_name': file_name,
+                'b2_file_name': b2_file_name,
+                'b2_url': 'https://f004.backblazeb2.com/file/Survzila/' + quote(b2_file_name)
+            }
+
+            print(file_info)
+            # Обновление проекта с добавлением информации о загруженном изображении
+            app.db.projects.update_one(
+                {"_id": project_id, "sectionse.name": section_name, "sectionse.subsections.name": subsection_name},
+                {"$push": {"sectionse.$.subsections.$[elem].images": {"image_url": file_info['b2_url']}}},
+                array_filters=[{"elem.name": subsection_name}]
+            )
+
+            updated_project = app.db.projects.find_one({"_id": project_id})
+            updated_project["_id"] = str(updated_project["_id"])
+            pprint.pprint(updated_project)
+            return jsonify({
+                "status": "success",
+                "message": "Image uploaded successfully",
+                "image_url": file_info['b2_url'],
+                "updated_project": updated_project
+            }), 200
+        else:
+            return jsonify({"status": "error", "message": "Failed to upload file"}), 400
+        
+
+    @app.route('/edit_project/<project_id>/<section_name>/<subsection_name>/delete_image', methods=['POST'])
+    def delete_image(project_id, section_name, subsection_name):
+        try:
+            project_id = ObjectId(project_id)
+        except Exception as e:
+            return jsonify({"status": "error", "message": "Invalid project_id"}), 400
+
+        image_url = request.json.get('image_url')  # Получение URL изображения из запроса
+
+        # Удаление изображения из подраздела в базе данных
+        result = app.db.projects.update_one(
+            {"_id": project_id, f"sectionse.name": section_name, f"sectionse.subsections.name": subsection_name},
+            {"$pull": {f"sectionse.$.subsections.$[elem].images": {"image_url": image_url}}},
+            array_filters=[{"elem.name": subsection_name}]
+        )
+        updated_project = app.db.projects.find_one({"_id": project_id})
+        updated_project["_id"] = str(updated_project["_id"])
+
+        if result.modified_count > 0:
+            return jsonify({"status": "success", "message": "Image deleted successfully","updated_project": updated_project}), 200
+        else:
+            return jsonify({"status": "error", "message": "Failed to delete image"}), 400
+
 
     #Дабовление и удаление записей в стандартные разделы разделах
     @app.route("/edit_project/<project_id>/add_step_standard", methods=["POST"])
@@ -193,7 +387,8 @@ def create_app():
             "updated_project": updated_project
         })
         
-    #Дабовление и удаление записей в разделах
+
+    #Дабовление и удаление записей в разделах (нужно переделать)--------------------------------------------------
     @app.route("/edit_project/<project_id>/add_step", methods=["POST"])
     def add_step(project_id):
         try:
@@ -201,31 +396,34 @@ def create_app():
         except Exception as e:
             return jsonify({"status": "error", "message": "Invalid project_id"}), 400
 
-        step_description = request.form.get("step_description")
-        section = request.form.get("section")
-
-        section_field = f"{section}_steps"
+        data = request.json
+        section = data.get("section")
+        subsection = data.get("subsection")
+        step_description = data.get("step_description")
+        print(section,subsection,step_description)
 
         try:
+            # Обновляем структуру базы данных, чтобы каждый раздел содержал список подразделов,
+            # а каждый подраздел содержал список шагов
             result = app.db.projects.update_one(
-                {"_id": project_id},
-                {"$push": {section_field: step_description}}
+                {"_id": project_id, f"sections.{section}.{subsection}": {"$exists": True}},
+                {"$push": {f"sections.{section}.{subsection}.steps": step_description}}
             )
+
             if result.modified_count == 0:
-                return jsonify({"status": "error", "message": "Project not found"}), 404
+                return jsonify({"status": "error", "message": "Project or section not found"}), 404
+
+            # Получаем обновленный проект после добавления шага
+            updated_project = app.db.projects.find_one({"_id": project_id})
+
+            # Преобразуем ObjectId в строку перед возвратом ответа JSON
+            updated_project["_id"] = str(updated_project["_id"])
+
+            return jsonify({"status": "success", "message": "Step added successfully", "updated_project": updated_project})
         except Exception as e:
             print("Error:", e)
             return jsonify({"status": "error", "message": "An error occurred"}), 500
-        
-        # Получите обновленный проект после добавления шага
-        updated_project = app.db.projects.find_one({"_id": project_id})
 
-        # Преобразуйте ObjectId в строку перед возвратом ответа JSON
-        updated_project["_id"] = str(updated_project["_id"])
-
-        print("Вот твоя поебота!!!!!!!!!!!!!!!!",updated_project)
-
-        return jsonify({"status": "success", "message": "Step added successfully","updated_project": updated_project})
 
     @app.route("/edit_project/<project_id>/add_subsection_step", methods=["POST"])
     def add_subsection_step(project_id):
@@ -240,8 +438,8 @@ def create_app():
 
         try:
             result = app.db.projects.update_one(
-                {"_id": project_id, "sections.name": section_name},
-                {"$push": {"sections.$.subsections.$[s].cells": {"description": step_description}}},
+                {"_id": project_id, "sectionse.name": section_name},
+                {"$push": {"sectionse.$.subsections.$[s].cells": {"description": step_description}}},
                 array_filters=[{"s.name": subsection_name}]
             )
             if result.modified_count == 0:
@@ -254,6 +452,131 @@ def create_app():
         updated_project['_id'] = str(updated_project['_id'])
 
         return jsonify({"status": "success", "message": "Step added successfully", "updated_project": updated_project})
+    
+
+    #Добавление изображения в основные подразделы (нужно переделать)-----------------------------------------
+    @app.route('/edit_project/<project_id>/add_imagestandard', methods=['POST'])
+    def add_imagestandard(project_id):
+        try:
+            project_id = ObjectId(project_id)
+        except Exception as e:
+            return jsonify({"status": "error", "message": "Invalid project_id"}), 400
+
+        # Получение файла из запроса
+        if 'image_upload' not in request.files:
+            return jsonify({"status": "error", "message": "No file part"}), 400
+
+        image_file = request.files['image_upload']
+
+        if image_file.filename == '':
+            return jsonify({"status": "error", "message": "No selected file"}), 400
+
+        if image_file:
+            file_data = image_file.read()
+            file_name = image_file.filename
+            b2_file_name = str(uuid.uuid4())
+
+            bucket.upload_bytes(
+                data_bytes=file_data,
+                file_name=b2_file_name
+            )
+
+            file_info = {
+                'file_name': file_name,
+                'b2_file_name': b2_file_name,
+                'b2_url': 'https://f004.backblazeb2.com/file/Survzila/' + quote(b2_file_name)
+            }
+            app.db.files.insert_one(file_info)
+
+            # Получение описания изображения и раздела
+            section = request.form.get('section')
+            subsection = request.form.get("subsection")
+            print(section,subsection)
+            section_field = f"{section}_steps"
+            # Обновление проекта с добавлением информации о загруженном изображении
+            app.db.projects.update_one(
+                {"_id": project_id, f"sections.{section}.{subsection}": {"$exists": True}},
+                {"$push": {f"sections.{section}.{subsection}.images": file_info["b2_url"]}}
+            )
+
+            updated_project = app.db.projects.find_one({"_id": project_id})
+            updated_project["_id"] = str(updated_project["_id"])
+
+            return jsonify({
+                "status": "success",
+                "message": "Image uploaded successfully",
+                "updated_project": updated_project
+            }), 200
+        else:
+            return jsonify({"status": "error", "message": "Failed to upload file"}), 400
+        
+
+    @app.route("/edit_project/<project_id>/remove_image", methods=["POST"])
+    def remove_image(project_id):
+        try:
+            project_id = ObjectId(project_id)
+        except Exception as e:
+            return jsonify({"status": "error", "message": "Invalid project_id"}), 400
+
+        data = request.json
+        section = data.get("section")
+        subsection = data.get("subsection")
+        image = data.get("image")
+
+        try:
+            # Удаляем изображение из списка
+            result = app.db.projects.update_one(
+                {"_id": project_id, f"sections.{section}.{subsection}.images": image},
+                {"$pull": {f"sections.{section}.{subsection}.images": image}}
+            )
+
+            if result.modified_count == 0:
+                return jsonify({"status": "error", "message": "Image not found"}), 404
+
+            # Получаем обновленный проект после удаления изображения
+            updated_project = app.db.projects.find_one({"_id": project_id})
+
+            # Преобразуем ObjectId в строку перед возвратом ответа JSON
+            updated_project["_id"] = str(updated_project["_id"])
+
+            return jsonify({"status": "success", "message": "Image removed successfully", "updated_project": updated_project})
+        except Exception as e:
+            print("Error:", e)
+            return jsonify({"status": "error", "message": "An error occurred"}), 500
+
+
+    @app.route("/edit_project/<project_id>/remove_step", methods=["POST"])
+    def remove_step(project_id):
+        try:
+            project_id = ObjectId(project_id)
+        except Exception as e:
+            return jsonify({"status": "error", "message": "Invalid project_id"}), 400
+
+        data = request.json
+        section = data.get("section")
+        subsection = data.get("subsection")
+        step_description = data.get("step_description")
+
+        try:
+            # Выполните удаление шага из базы данных
+            result = app.db.projects.update_one(
+                {"_id": project_id, f"sections.{section}.{subsection}.steps": step_description},
+                {"$pull": {f"sections.{section}.{subsection}.steps": step_description}}
+            )
+
+            if result.modified_count == 0:
+                return jsonify({"status": "error", "message": "Step not found"}), 404
+
+            # Получите обновленный проект после удаления шага
+            updated_project = app.db.projects.find_one({"_id": project_id})
+
+            # Преобразуйте ObjectId в строку перед возвратом ответа JSON
+            updated_project["_id"] = str(updated_project["_id"])
+
+            return jsonify({"status": "success", "message": "Step removed successfully", "updated_project": updated_project})
+        except Exception as e:
+            print("Error:", e)
+            return jsonify({"status": "error", "message": "An error occurred"}), 500
 
     @app.route("/edit_project/<project_id>/delete_step", methods=["POST"])
     def delete_step(project_id):
@@ -303,7 +626,7 @@ def create_app():
         try:
             result = app.db.projects.update_one(
                 {"_id": project_id},
-                {"$push": {"sections": {"name": section_name, "subsections": []}}}
+                {"$push": {"sectionse": {"name": section_name, "subsections": []}}}
             )
             if result.modified_count == 0:
                 return "Project not found", 404
@@ -351,8 +674,8 @@ def create_app():
 
         try:
             result = app.db.projects.update_one(
-                {"_id": project_id, "sections.name": section_name},
-                {"$push": {"sections.$.subsections": {"name": subsection_name, "cells": []}}}
+                {"_id": project_id, "sectionse.name": section_name},
+                {"$push": {"sectionse.$.subsections": {"name": subsection_name, "cells": []}}}
             )
             if result.modified_count == 0:
                 return "Section not found in the project", 404
@@ -376,13 +699,13 @@ def create_app():
         section_name = request.form.get("section_name")
         subsection_name = request.form.get("subsection_name")
 
-        print(section_name, subsection_name)
-        
         try:
+            # Добавляем новый подраздел в указанный раздел
             result = app.db.projects.update_one(
-                {"_id": project_id},
-                {"$push": {section_name: {"name": subsection_name, "subsections": []}}}
+                {"_id": project_id, f"sections.{section_name}": {"$exists": True}},
+                {"$set": { f"sections.{section_name}.{subsection_name}": {"images": [], "steps": []}}}
             )
+            
             if result.modified_count == 0:
                 return "Section not found in the project", 404
         except Exception as e:
@@ -392,7 +715,7 @@ def create_app():
         updated_project = app.db.projects.find_one({"_id": project_id})
         updated_project['_id'] = str(updated_project['_id'])
 
-        return jsonify({"status": "success", "message": "Hello bithes", "project": updated_project})
+        return jsonify({"status": "success", "message": "Subsection added successfully", "project": updated_project})
 
     #--удаление подраздела
     @app.route("/edit_project/<project_id>/delete_subsection/<section_name>/<subsection_name>", methods=["POST"])
