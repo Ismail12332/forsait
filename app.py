@@ -32,7 +32,9 @@ def create_app():
     app.db = client.my_database
     users_collection = app.db.users
     projects_collection = app.db.projects
-    client = OpenAI(os.getenv("SECRET_KEY_OPENAI"))
+    client = OpenAI(
+        api_key=os.getenv("OPENAI_API_KEY")
+    )
 
     # Создание клиента Backblaze B2
     info = InMemoryAccountInfo()
