@@ -181,7 +181,7 @@ def create_app():
     def get_projects(supports_credentials=True):
         user_id = request.args.get("user_id")
         print(user_id)
-        if user_id != '':
+        if user_id != None:
             projects = app.db.projects.find({"user_id": user_id})
             projects_list = convert_projects_to_list(projects)
             return jsonify({"status": "success", "user_id": str(user_id), "projects": projects_list})
