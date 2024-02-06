@@ -186,13 +186,16 @@ def create_app():
         return projects_list
     
 
-    @app.route("/api/glav", methods=["GET"])
+    @app.route("/glav", methods=["GET"])
     def get_projects(supports_credentials=True):
         user_id = request.args.get("user_id")
         print(user_id)
-        projects = app.db.projects.find({"user_id": user_id})
-        projects_list = convert_projects_to_list(projects)
-        return jsonify({"status": "success", "user_id": str(user_id), "projects": projects_list})
+        if user_id != '':
+            projects = app.db.projects.find({"user_id": user_id})
+            projects_list = convert_projects_to_list(projects)
+            return jsonify({"status": "success", "user_id": str(user_id), "projects": projects_list})
+        else:
+            return render_template("index.html")
     
 
     @app.route("/index2", methods=["POST"])
