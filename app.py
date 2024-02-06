@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, session,jsonify,abort,send_file
+from flask import Flask, render_template, request, redirect, url_for, session,jsonify,abort,send_file,send_static_file
 from pymongo import MongoClient
 from passlib.hash import bcrypt
 from bson import ObjectId
