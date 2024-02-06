@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, session,jsonify,abort,send_file,send_static_file
+from flask import Flask, render_template, request, redirect, url_for, session,jsonify,abort,send_file,
 from pymongo import MongoClient
 from passlib.hash import bcrypt
 from bson import ObjectId
@@ -77,15 +77,6 @@ def create_app():
         return render_template("index.html")
     
 
-    @app.route('/', defaults={'path': ''})
-    @app.route('/<path:path>')
-    def catch_all(path):
-        if path.startswith("api/"):
-            # Если путь начинается с api/, значит это запрос к API
-            abort(404)  # Или обработайте API-запрос здесь, если нужно
-        else:
-            # Для всех остальных путей возвращаем index.html
-            return app.send_static_file('index.html')
 
     #выход
     @app.route("/logout")
