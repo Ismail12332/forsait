@@ -177,7 +177,7 @@ def create_app():
         return projects_list
     
 
-    @app.route("/glav", methods=["GET"])
+    @app.route("/api/glav", methods=["GET"])
     def get_projects(supports_credentials=True):
         user_id = request.args.get("user_id")
         print(user_id)
