@@ -811,13 +811,14 @@ def create_app():
         data = request.json
         section = data['section']
         subsection = data['subsection']
-        prompt = f"Пожалуйста, дайте рекомендации для осмотра яхты для раздела {section}, подраздела {subsection}. Что стоит осмотреть и проверить при осмотре {subsection}?"
+        description = data['step_description']
+        prompt = f"был проведен осмотр части корабля {section}, а именно осматривалась {subsection}. если в крации то {description}"
 
         try:
             response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "Ты помощник клиента в осмотре яхты указываешь на то что стоит проверить и как лучше проверять"},
+                {"role": "system", "content": "Ты помощник работника который осмотривает яхты он тебе пишет краткое описание осмотра определенной части коробля тебе нужно расписать какие работы были сделаны"},
                 {"role": "user", "content": prompt}
             ]
             )
