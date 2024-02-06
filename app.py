@@ -281,6 +281,12 @@ def create_app():
 
         return jsonify({"status": "success", "project": project})
 
+
+    @app.route("/EditProject", methods=["GET"])
+    def get_projectse_edit_project(supports_credentials=True):
+            return render_template("index.html")
+    
+
     #Добавление изображения для подразделов стандартных разделов
     @app.route('/edit_project/upload_image/<project_id>/<section_name>/<subsection_name>', methods=['POST'])
     def upload_image(project_id, section_name, subsection_name):
