@@ -57,6 +57,26 @@ def create_app():
     # Регистрация шрифта
     pdfmetrics.registerFont(TTFont('DejaVuSans', 'DejaVuSans.ttf'))
 
+    @app.route("/", methods=["GET", "POST"])
+    def login(supports_credentials=True):
+        if request.method == "POST":
+            data = request.json
+            username = data.get("username")
+            password = data.get("password")
+
+            user = users_collection.find_one({"username": username})
+
+            
+            if user and bcrypt.verify(password, user["password_hash"]):
+                user_id = user["user_id"]
+                print({'status': 'success', 'user_id': str(user["_id"])})
+                return jsonify({'status': 'success', 'user_id': str(user_id)})  # Возвращаем JSON-ответ
+
+            return jsonify({'status': 'error', 'message': 'Incorrect username or password.'}), 401  # Возвращаем JSON-ответ
+
+        return render_template("index.html")
+    
+
     @app.route('/', defaults={'path': ''})
     @app.route('/<path:path>')
     def catch_all(path):
