@@ -160,7 +160,7 @@ def create_app():
 
         # Отправка PDF клиенту
         return send_file(
-            pdf_buffer,
+            pdf_buffer,/api
             as_attachment=True,
             download_name=f"project_{project_id}.pdf",
             mimetype='application/pdf'
@@ -261,7 +261,7 @@ def create_app():
 
 
     #Переключение на проект в главное странице нажатие на имя проекта
-    @app.route("/EditProject/<string:project_id>", methods=["GET"])
+    @app.route("/EditProject/<string:project_id>", methods=["POST"])
     def edit_project(project_id,supports_credentials=True):
         try:
             # Преобразовываем project_id в ObjectId
