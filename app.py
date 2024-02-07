@@ -160,7 +160,7 @@ def create_app():
 
         # Отправка PDF клиенту
         return send_file(
-            pdf_buffer,/api
+            pdf_buffer,
             as_attachment=True,
             download_name=f"project_{project_id}.pdf",
             mimetype='application/pdf'
