@@ -283,8 +283,8 @@ def create_app():
 
 
     @app.route("/EditProject/<project_id>", methods=["GET"])
-    def get_projectse_edit_project(supports_credentials=True):
-            return render_template("index.html")
+    def get_projectse_edit_project(project_id,supports_credentials=True):
+        return render_template("index.html")
     
 
     #Добавление изображения для подразделов стандартных разделов
