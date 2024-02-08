@@ -261,7 +261,7 @@ def create_app():
 
 
     #Переключение на проект в главное странице нажатие на имя проекта
-    @app.route("/EditProject/<string:project_id>", methods=["POST"])
+    @app.route("/api/EditProject/<string:project_id>", methods=["POST"])
     def edit_project(project_id,supports_credentials=True):
         try:
             # Преобразовываем project_id в ObjectId
@@ -282,7 +282,7 @@ def create_app():
         return jsonify({"status": "success", "project": project})
 
 
-    @app.route("/EditProject", methods=["GET"])
+    @app.route("/EditProject/<project_id>", methods=["GET"])
     def get_projectse_edit_project(supports_credentials=True):
             return render_template("index.html")
     
