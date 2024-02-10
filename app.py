@@ -175,13 +175,18 @@ def create_app():
         return projects_list
     
 
-    @app.route("/glav", methods=["GET"])
+    @app.route("/api/glav", methods=["GET"])
     def get_projects(supports_credentials=True):
         user_id = request.args.get("user_id")
         print(user_id)
         projects = app.db.projects.find({"user_id": user_id})
         projects_list = convert_projects_to_list(projects)
         return jsonify({"status": "success", "user_id": str(user_id), "projects": projects_list})
+    
+    
+    @app.route("/glav", methods=["GET"])
+    def get_projectse(supports_credentials=True):
+            return render_template("index.html")
     
 
     @app.route("/index2", methods=["POST"])
@@ -269,6 +274,11 @@ def create_app():
         print(f"Fetching project with ID: {project_id}", project)
 
         return jsonify({"status": "success", "project": project})
+    
+
+    @app.route("/EditProject/<project_id>", methods=["GET"])
+    def get_projectse_edit_project(project_id,supports_credentials=True):
+        return render_template("index.html")
 
     #Добавление изображения для подразделов стандартных разделов
     @app.route('/edit_project/upload_image/<project_id>/<section_name>/<subsection_name>', methods=['POST'])
