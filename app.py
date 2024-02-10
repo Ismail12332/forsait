@@ -74,7 +74,7 @@ def create_app():
 
             return jsonify({'status': 'error', 'message': 'Incorrect username or password.'}), 401  # Возвращаем JSON-ответ
 
-        return render_template("login.html")
+        return render_template("index.html")
 
     #выход
     @app.route("/logout")
