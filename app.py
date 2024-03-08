@@ -122,9 +122,9 @@ def create_app():
 
         # Перебор разделов и подразделов
         for section_name, section_content in project['sections'].items():
-            story.append(Paragraph(section_name, styles['Heading1']))
+            story.append(Paragraph(section_name, styles['CustomNormal']))
             for subsection_name, subsection_content in section_content.items():
-                story.append(Paragraph(subsection_name, styles['Heading2']))
+                story.append(Paragraph(subsection_name, styles['CustomNormal']))
 
                 # Добавление шагов
                 for step in subsection_content['steps']:
@@ -183,7 +183,7 @@ def create_app():
         projects_list = convert_projects_to_list(projects)
         return jsonify({"status": "success", "user_id": str(user_id), "projects": projects_list})
     
-    
+
     @app.route("/glav", methods=["GET"])
     def get_projectse(supports_credentials=True):
             return render_template("index.html")
