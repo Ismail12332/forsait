@@ -14,12 +14,14 @@ import pprint
 from openai import OpenAI
 import traceback
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak, Indenter, Table
 from reportlab.lib.styles import getSampleStyleSheet,ParagraphStyle
 from reportlab.lib.units import inch
 from io import BytesIO
 from reportlab.pdfbase import pdfmetrics
+from reportlab.lib import colors
 from reportlab.pdfbase.ttfonts import TTFont
+import html
 
 load_dotenv()
 
@@ -109,39 +111,104 @@ def create_app():
 
     def create_project_pdf(project):
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter)
-        story = []
         styles = getSampleStyleSheet()
         styles.add(ParagraphStyle(name='CustomNormal', fontName='DejaVuSans'))
+        styles.add(ParagraphStyle(name='CenteredHeading1', parent=styles['Heading1'], alignment=1))
 
-        # Добавление основной информации проекта
-        story.append(Paragraph(f"First Name: {project['first_name']}", styles['Heading1']))
-        story.append(Paragraph(f"Last Name: {project['last_name']}", styles['Heading1']))
-        story.append(Paragraph(f"City: {project['city']}", styles['Heading1']))
-        story.append(Spacer(1, 0.2 * inch))
+        def build_story(project):
+            story = []
 
-        # Перебор разделов и подразделов
-        for section_name, section_content in project['sections'].items():
-            story.append(Paragraph(section_name, styles['CustomNormal']))
-            for subsection_name, subsection_content in section_content.items():
-                story.append(Paragraph(subsection_name, styles['CustomNormal']))
+            # Добавление основной информации проекта
+            Survey_logo = "static/images/survz.webp"
+            img = Image(Survey_logo)
+            img.drawHeight = 2 * inch
+            img.drawWidth = 2 * inch
+            story.append(img)
 
-                # Добавление шагов
-                for step in subsection_content['steps']:
-                    story.append(Paragraph(step, styles['CustomNormal']))
-                    story.append(Spacer(1, 0.1 * inch))
+            F_L_Name = project['first_name'] + " " + project['last_name']
+            story.append(Paragraph(f"Survzilla Survey Report for {F_L_Name}", styles['CenteredHeading1']))
+            story.append(Paragraph(f"Vessel - {project['vessel_name']}", styles['CenteredHeading1']))
 
-                # Добавление изображений
-                for image_url in subsection_content['images']:
-                    img = Image(image_url)
-                    img.drawHeight = 2 * inch
-                    img.drawWidth = 2 * inch
-                    story.append(img)
-                    story.append(Spacer(1, 0.2 * inch))
-
+            intro_image_url = project['sections']['introduction']['gen_info']['images'][0]
+            intro_image = Image(intro_image_url)
+            intro_image.drawHeight = 5 * inch
+            intro_image.drawWidth = 5 * inch
+            story.append(intro_image)
             story.append(Spacer(1, 0.2 * inch))
+            story.append(PageBreak())
 
-        doc.build(story)
+            for section_name, section_content in project['sections'].items():
+                cleaned_section_name = section_name.replace('_', ' ').title()
+                story.append(Paragraph(cleaned_section_name, styles['CenteredHeading1']))
+                for subsection_name, subsection_content in section_content.items():
+                    if subsection_content['steps'] or subsection_content['images']:
+                        cleaned_subsection_name = subsection_name.replace('_', ' ').title()
+                        story.append(Paragraph(cleaned_subsection_name, styles['CustomNormal']))
+
+                        images = []
+                        for image_url in subsection_content['images']:
+                            img = Image(image_url)
+                            img.drawHeight = 2 * inch
+                            img.drawWidth = 2 * inch
+                            images.append(img)
+                            if len(images) == 2:
+                                story.append(Table([images], colWidths=[2.5 * inch, 2.5 * inch]))
+                                story.append(Spacer(1, 0.2 * inch))
+                                images = []
+                        if images:
+                            story.append(Table([images], colWidths=[2.5 * inch, 2.5 * inch]))
+                            story.append(Spacer(1, 0.2 * inch))
+
+                        story.append(Indenter(left=20))
+
+                        
+                        for step in subsection_content['steps']:
+                            step = html.escape(step)  # Экранируем специальные символы HTML
+                            story.append(Paragraph(step, styles['CustomNormal']))
+                            story.append(Spacer(1, 0.1 * inch))
+                        story.append(Indenter(left=-20))
+
+                story.append(Spacer(0.5, 0.2 * inch))
+                story.append(Spacer(1, 0.2 * inch))
+                story.append(Spacer(0.5, 0.2 * inch))
+
+            return story
+
+        # Создаем временный PDF для определения общего количества страниц
+        temp_buffer = BytesIO()
+        temp_doc = SimpleDocTemplate(temp_buffer, pagesize=letter)
+        story = build_story(project)
+        temp_doc.build(story)
+        total_pages = temp_doc.page
+
+        # Создаем основной PDF с нумерацией страниц
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter)
+
+        def on_first_page(canvas, doc):
+            page_num = canvas.getPageNumber()
+            text = f"{project['vessel_name']} inspected by Survzilla Boat Inspection page {page_num} of {total_pages}"
+            canvas.setFont('Helvetica', 10)
+            canvas.drawRightString(doc.width + doc.rightMargin, 0.75 * inch, text)
+
+        def on_later_pages(canvas, doc):
+            page_num = canvas.getPageNumber()
+            text = f"'{project['vessel_name']}' inspected by Survzilla Boat Inspection page {page_num} of {total_pages}"
+
+            # Добавление названия лодки и тонкой линии вверху каждой страницы, кроме первой
+            canvas.setFont('Helvetica-Bold', 12)
+            canvas.drawString(doc.leftMargin, doc.height + doc.topMargin + 35, project['vessel_name'])
+            canvas.setStrokeColor(colors.black)
+            canvas.setLineWidth(0.5)
+            canvas.line(doc.leftMargin, doc.height + doc.topMargin + 25, doc.width + doc.leftMargin, doc.height + doc.topMargin + 25)
+            canvas.line(doc.leftMargin, doc.height + doc.topMargin + 27, doc.width + doc.leftMargin, doc.height + doc.topMargin + 27)
+
+            # Добавление номера страницы
+            canvas.setFont('Helvetica', 10)
+            canvas.drawRightString(doc.width + doc.rightMargin, 0.75 * inch, text)
+
+        story = build_story(project)
+        doc.build(story, onFirstPage=on_first_page, onLaterPages=on_later_pages)
         buffer.seek(0)
         return buffer
 
@@ -643,13 +710,13 @@ def create_app():
         section = data['section']
         subsection = data['subsection']
         description = data['step_description']
-        prompt = f"был проведен осмотр части корабля {section}, а именно осматривалась {subsection}. если в крации то {description}"
+        prompt = f"part of the ship was inspected {section}, namely, looked around{subsection}. in short then {description}"
 
         try:
             response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "Ты помощник работника который осмотривает яхты он тебе пишет краткое описание осмотра определенной части коробля тебе нужно расписать как проводился осмотр"},
+                {"role": "system", "content": "You are an assistant to an employee who inspects yachts, he writes you a brief description of the inspection of a certain part of the ship (let’s assume everything is fine), you need to describe how the inspection was carried out"},
                 {"role": "user", "content": prompt}
             ]
             )
