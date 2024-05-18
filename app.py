@@ -129,11 +129,13 @@ def create_app():
             story.append(Paragraph(f"Survzilla Survey Report for {F_L_Name}", styles['CenteredHeading1']))
             story.append(Paragraph(f"Vessel - {project['vessel_name']}", styles['CenteredHeading1']))
 
-            intro_image_url = project['sections']['introduction']['gen_info']['images'][0]
-            intro_image = Image(intro_image_url)
-            intro_image.drawHeight = 5 * inch
-            intro_image.drawWidth = 5 * inch
-            story.append(intro_image)
+            gen_info_images = project['sections']['introduction']['gen_info'].get('images', [])
+            if gen_info_images:
+                intro_image_url = gen_info_images[0]
+                intro_image = Image(intro_image_url)
+                intro_image.drawHeight = 5 * inch
+                intro_image.drawWidth = 5 * inch
+                story.append(intro_image)
             story.append(Spacer(1, 0.2 * inch))
             story.append(PageBreak())
 
