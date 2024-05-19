@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, session,jsonify,abort,send_file
+from flask import Flask, render_template, request, redirect, url_for, session,jsonify,abort,send_file, make_response
 from pymongo import MongoClient
 from passlib.hash import bcrypt
 from bson import ObjectId
@@ -11,17 +11,24 @@ from b2sdk.v2 import *
 import secrets
 import uuid
 import pprint
+import jwt
+import requests
+from jose import jwt, JWTError
+from functools import wraps
 from openai import OpenAI
 import traceback
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak, Indenter, Table
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak, Indenter, Table, TableStyle, KeepTogether
 from reportlab.lib.styles import getSampleStyleSheet,ParagraphStyle
+from reportlab.graphics.shapes import Drawing, Line
 from reportlab.lib.units import inch
+from reportlab.lib import colors
 from io import BytesIO
 from reportlab.pdfbase import pdfmetrics
-from reportlab.lib import colors
 from reportlab.pdfbase.ttfonts import TTFont
 import html
+import time
+
 
 load_dotenv()
 
@@ -59,24 +66,73 @@ def create_app():
     # Регистрация шрифта
     pdfmetrics.registerFont(TTFont('DejaVuSans', 'DejaVuSans.ttf'))
 
-    @app.route("/", methods=["GET", "POST"])
+
+    # Конфигурация Auth0
+    AUTH0_DOMAIN = 'dev-whbba5qnfveb88fc.us.auth0.com'
+    API_AUDIENCE = 'http://Survzilla'
+    ALGORITHMS = ['RS256']
+
+
+    # Получение открытых ключей Auth0 с обработкой ошибок
+    jwks_url = f'https://{AUTH0_DOMAIN}/.well-known/jwks.json'
+
+    def get_jwks():
+        for attempt in range(3):  # Попробуем три раза
+            try:
+                jwks = requests.get(jwks_url).json()
+                return jwks
+            except requests.exceptions.ConnectionError as e:
+                print(f"Ошибка соединения при попытке {attempt + 1}: {e}")
+                time.sleep(1)  # Подождем секунду перед повторной попыткой
+        raise RuntimeError("Не удалось получить JWKS ключи после нескольких попыток")
+
+    jwks = get_jwks()
+
+    def get_rsa_key(header):
+        for key in jwks['keys']:
+            if key['kid'] == header['kid']:
+                return {
+                    'kty': key['kty'],
+                    'kid': key['kid'],
+                    'use': key['use'],
+                    'n': key['n'],
+                    'e': key['e']
+                }
+        return None
+
+    def requires_auth(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            auth_header = request.headers.get('Authorization', None)
+            if not auth_header:
+                return jsonify({"message": "Authorization header is missing"}), 401
+
+            token = auth_header.split()[1]
+            try:
+                header = jwt.get_unverified_header(token)
+                rsa_key = get_rsa_key(header)
+                if not rsa_key:
+                    return jsonify({"message": "Invalid header"}), 401
+
+                payload = jwt.decode(
+                    token,
+                    rsa_key,
+                    algorithms=ALGORITHMS,
+                    audience=API_AUDIENCE,
+                    issuer=f'https://{AUTH0_DOMAIN}/'
+                )
+            except JWTError as e:
+                return jsonify({"message": "Invalid token"}), 401
+
+            request.user = payload
+            return f(*args, **kwargs)
+        return decorated
+
+
+
+    @app.route("/", methods=["GET"])
     def login(supports_credentials=True):
-        if request.method == "POST":
-            data = request.json
-            username = data.get("username")
-            password = data.get("password")
-
-            user = users_collection.find_one({"username": username})
-
-            
-            if user and bcrypt.verify(password, user["password_hash"]):
-                user_id = user["user_id"]
-                print({'status': 'success', 'user_id': str(user["_id"])})
-                return jsonify({'status': 'success', 'user_id': str(user_id)})  # Возвращаем JSON-ответ
-
-            return jsonify({'status': 'error', 'message': 'Incorrect username or password.'}), 401  # Возвращаем JSON-ответ
-
-        return render_template("index.html")
+        return render_template("login.html")
 
     #выход
     @app.route("/logout")
@@ -84,29 +140,6 @@ def create_app():
         # Очищаем сессию пользователя при выходе
         session.pop("user_id", None)
         return redirect(url_for("login"))
-
-    @app.route("/register", methods=["POST"])
-    def register():
-        data = request.json  # Получаем данные из JSON-запроса
-        username = data.get("username")
-        password = data.get("password")
-        email = data.get("email")
-
-        # Проверка, что пользователь с таким именем уже не существует
-        if users_collection.find_one({"username": username}):
-            return "Пользователь с таким именем уже существует.", 400
-
-        # Создание нового пользователя и сохранение его в базе данных
-        user_id = secrets.token_urlsafe(16)  # Generate a random user_id
-        new_user = User(username, password, email)
-        users_collection.insert_one({
-            "user_id": user_id,
-            "username": new_user.username,
-            "password_hash": new_user.password_hash,
-            "email": new_user.email
-        })
-
-        return "Регистрация прошла успешно.", 200
 
 
     def create_project_pdf(project):
@@ -216,6 +249,7 @@ def create_app():
 
 
     @app.route('/download_project_pdf/<project_id>')
+    @requires_auth
     def download_project_pdf(project_id):
         # Получение проекта по его ID (примерная реализация)
         project = projects_collection.find_one({"_id": ObjectId(project_id)})
@@ -240,35 +274,34 @@ def create_app():
             project_data = {**project}
             project_data["_id"] = str(project["_id"])
             projects_list.append(project_data)
-        print(projects_list)
         return projects_list
     
 
     @app.route("/api/glav", methods=["GET"])
+    @requires_auth
     def get_projects(supports_credentials=True):
-        user_id = request.args.get("user_id")
-        print(user_id)
+        user_id = request.user.get('sub')  # Извлекаем user_id из токена
         projects = app.db.projects.find({"user_id": user_id})
         projects_list = convert_projects_to_list(projects)
         return jsonify({"status": "success", "user_id": str(user_id), "projects": projects_list})
     
 
     @app.route("/glav", methods=["GET"])
+    @requires_auth
     def get_projectse(supports_credentials=True):
             return render_template("index.html")
     
 
-    @app.route("/index2", methods=["POST"])
-    def create_project():
-        data = request.json  # Получаем данные из JSON-запроса
-        user_id = data.get("user_id")
-        print(user_id)
 
+    @app.route("/index2", methods=["POST"])
+    @requires_auth
+    def create_project():
+        user_id = request.user.get("sub")
+        data = request.json  # Получаем данные из JSON-запроса
         # Обновляем запрос к базе данных, чтобы фильтровать проекты по user_id
         projects = app.db.projects.find({"user_id": user_id})
         projects_list = convert_projects_to_list(projects)
 
-        user_id = data.get("user_id")
         first_name = data.get("first_name")
         last_name = data.get("last_name")
         city = data.get("city")
@@ -309,6 +342,7 @@ def create_app():
                     "safety": { "navigational_lights": {"images": [],"steps": []},"life_jackets": {"images": [],"steps": []},"throwable_pfd": {"images": [],"steps": []},"visual_distress_signals": {"images": [],"steps": []},"sound_devices": {"images": [],"steps": []},"uscg_placards": {"images": [],"steps": []},"flame_arrestors": {"images": [],"steps": []},"engine_ventilation": {"images": [],"steps": []},"ignition_protection": {"images": [],"steps": []},"inland_navigational_rule_book": {"images": [],"steps": []},"waste_management_plan": {"images": [],"steps": []},"fire_fighting_equipment": {"images": [],"steps": []},"bilge_pumps": {"images": [],"steps": []},"ground_tackle_windlass": {"images": [],"steps": []},"auxiliary_safety_equipment": {"images": [],"steps": []},
                     },
                 },
+            "sectionse": [],
             "vessel_name": vessel_name,
             "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "user_id": user_id
@@ -324,7 +358,8 @@ def create_app():
 
 
     #Переключение на проект в главное странице нажатие на имя проекта
-    @app.route("/api/EditProject/<string:project_id>", methods=["POST"])
+    @app.route("/api/EditProject/<string:project_id>", methods=["GET"])
+    @requires_auth
     def edit_project(project_id,supports_credentials=True):
         try:
             # Преобразовываем project_id в ObjectId
@@ -344,13 +379,14 @@ def create_app():
 
         return jsonify({"status": "success", "project": project})
     
-
     @app.route("/EditProject/<project_id>", methods=["GET"])
+    @requires_auth
     def get_projectse_edit_project(project_id,supports_credentials=True):
         return render_template("index.html")
 
     #Добавление изображения для подразделов стандартных разделов
     @app.route('/edit_project/upload_image/<project_id>/<section_name>/<subsection_name>', methods=['POST'])
+    @requires_auth
     def upload_image(project_id, section_name, subsection_name):
         try:
             project_id = ObjectId(project_id)
@@ -404,6 +440,7 @@ def create_app():
 
     #delite
     @app.route('/edit_project/<project_id>/<section_name>/<subsection_name>/delete_images', methods=['POST'])
+    @requires_auth
     def delete_images(project_id, section_name, subsection_name):
         try:
             project_id = ObjectId(project_id)
@@ -428,6 +465,7 @@ def create_app():
         
 
     @app.route('/edit_project/<project_id>/<section_name>/<subsection_name>/add_image', methods=['POST'])
+    @requires_auth
     def add_image(project_id,section_name, subsection_name):
         try:
             project_id = ObjectId(project_id)
@@ -483,6 +521,7 @@ def create_app():
 
     #Дабовление и удаление записей в разделах (нужно переделать)--------------------------------------------------
     @app.route("/edit_project/<project_id>/add_step", methods=["POST"])
+    @requires_auth
     def add_step(project_id):
         try:
             project_id = ObjectId(project_id)
@@ -521,6 +560,7 @@ def create_app():
 
     #Добавление изображения в основные подразделы (нужно переделать)-----------------------------------------
     @app.route('/edit_project/<project_id>/add_imagestandard', methods=['POST'])
+    @requires_auth
     def add_imagestandard(project_id):
         try:
             project_id = ObjectId(project_id)
@@ -577,6 +617,7 @@ def create_app():
         
 
     @app.route("/edit_project/<project_id>/remove_image", methods=["POST"])
+    @requires_auth
     def remove_image(project_id):
         try:
             project_id = ObjectId(project_id)
@@ -611,6 +652,7 @@ def create_app():
 
 
     @app.route("/edit_project/<project_id>/remove_step", methods=["POST"])
+    @requires_auth
     def remove_step(project_id):
         try:
             project_id = ObjectId(project_id)
@@ -647,6 +689,7 @@ def create_app():
     #----------------------------------------------------------------
     #Добавление раздела
     @app.route("/edit_project/<project_id>/add_section", methods=["POST"])
+    @requires_auth
     def add_section(project_id):
         try:
             project_id = ObjectId(project_id)
@@ -673,6 +716,7 @@ def create_app():
 
     #Добавление подраздела
     @app.route("/edit_project/<project_id>/add_subsection", methods=["POST"])
+    @requires_auth
     def add_subsection(project_id):
         try:
             project_id = ObjectId(project_id)
@@ -707,6 +751,7 @@ def create_app():
 
     #чат джипити
     @app.route('/edit_project/<project_id>/get-gpt-recommendations', methods=['POST'])
+    @requires_auth
     def get_gpt_recommendations(project_id):
         data = request.json
         section = data['section']
