@@ -132,7 +132,7 @@ def create_app():
 
     @app.route("/", methods=["GET"])
     def login(supports_credentials=True):
-        return render_template("login.html")
+        return render_template("index.html")
 
     #выход
     @app.route("/logout")
