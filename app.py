@@ -131,8 +131,8 @@ def create_app():
 
 
     @app.route("/", methods=["GET"])
-    def loginse(supports_credentials=True):
-        return render_template("index.html")
+    def login(supports_credentials=True):
+        return render_template("login.html")
 
     #выход
     @app.route("/logout")
@@ -358,7 +358,7 @@ def create_app():
 
 
     #Переключение на проект в главное странице нажатие на имя проекта
-    @app.route("/api/EditProject/<string:project_id>", methods=["GET"])
+    @app.route("/api/EditProject/<string:project_id>", methods=["POST"])
     @requires_auth
     def edit_project(project_id,supports_credentials=True):
         try:
