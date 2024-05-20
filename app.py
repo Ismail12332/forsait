@@ -287,7 +287,6 @@ def create_app():
     
 
     @app.route("/glav", methods=["GET"])
-    @requires_auth
     def get_projectse(supports_credentials=True):
             return render_template("index.html")
     
