@@ -379,7 +379,6 @@ def create_app():
         return jsonify({"status": "success", "project": project})
     
     @app.route("/EditProject/<project_id>", methods=["GET"])
-    @requires_auth
     def get_projectse_edit_project(project_id,supports_credentials=True):
         return render_template("index.html")
 
