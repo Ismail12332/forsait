@@ -28,7 +28,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import html
 import time
-
+import stripe
 
 load_dotenv()
 
@@ -60,8 +60,8 @@ def create_app():
     b2_api.authorize_account("production", application_key_id, application_key)
 
     # Получение бакета (папки) для хранения изображений
-    bucket_name = 'Survzila'
-    bucket = b2_api.get_bucket_by_name(bucket_name)
+    bucket_name_b2 = 'Survzila'
+    bucket = b2_api.get_bucket_by_name(bucket_name_b2)
 
     # Регистрация шрифта
     pdfmetrics.registerFont(TTFont('DejaVuSans', 'DejaVuSans.ttf'))
@@ -133,6 +133,20 @@ def create_app():
     @app.route("/", methods=["GET"])
     def login(supports_credentials=True):
         return render_template("index.html")
+    
+
+    @app.route("/api/vitrine", methods=["GET"])
+    def get_vitrine_projects():
+        try:
+            projects = list(app.db.vitrine.find({}))
+            for project in projects:
+                project['_id'] = str(project['_id'])
+                project['project_id'] = str(project['project_id'])
+            return jsonify({"status": "success", "projects": projects}), 200
+        except Exception as e:
+            print(f"Произошла ошибка: {e}")
+            return jsonify({"status": "error", "message": str(e)}), 500
+    
 
     #выход
     @app.route("/logout")
@@ -158,7 +172,11 @@ def create_app():
             img.drawWidth = 2 * inch
             story.append(img)
 
-            F_L_Name = project['first_name'] + " " + project['last_name']
+            # Обработка first_name и last_name
+            first_name = project['first_name'] or ''
+            last_name = project['last_name'] or ''
+
+            F_L_Name = first_name + " " + last_name
             story.append(Paragraph(f"Survzilla Survey Report for {F_L_Name}", styles['CenteredHeading1']))
             story.append(Paragraph(f"Vessel - {project['vessel_name']}", styles['CenteredHeading1']))
 
@@ -173,12 +191,33 @@ def create_app():
             story.append(PageBreak())
 
             for section_name, section_content in project['sections'].items():
+                # Проверка, есть ли в подразделах непустые данные
+                has_non_empty_subsection = False
+                for subsection_name, subsection_content in section_content.items():
+                    if subsection_content['steps'] or subsection_content['images']:
+                        has_non_empty_subsection = True
+                        break
+                
+                if not has_non_empty_subsection:
+                    continue  # Пропускаем этот раздел, если все его подразделы пусты
+
                 cleaned_section_name = section_name.replace('_', ' ').title()
                 story.append(Paragraph(cleaned_section_name, styles['CenteredHeading1']))
+
                 for subsection_name, subsection_content in section_content.items():
                     if subsection_content['steps'] or subsection_content['images']:
                         cleaned_subsection_name = subsection_name.replace('_', ' ').title()
-                        story.append(Paragraph(cleaned_subsection_name, styles['CustomNormal']))
+                        criticality = subsection_content.get('criticality', '')
+                        crit_img_path = f"static/images/{criticality}.png" if criticality else None
+                        crit_img = Image(crit_img_path) if crit_img_path else None
+                        if crit_img:
+                            crit_img.drawHeight = 0.3 * inch
+                            crit_img.drawWidth = 0.3 * inch
+                            subsection_paragraph = Paragraph(f"{cleaned_subsection_name}&nbsp;&nbsp;", styles['CustomNormal'])
+                            subsection_table = Table([[subsection_paragraph, crit_img]], colWidths=[2 * inch, 0.5 * inch])
+                            story.append(subsection_table)
+                        else:
+                            story.append(Paragraph(cleaned_subsection_name, styles['CustomNormal']))
 
                         images = []
                         for image_url in subsection_content['images']:
@@ -196,9 +235,12 @@ def create_app():
 
                         story.append(Indenter(left=20))
 
+
+                        
+                        
                         
                         for step in subsection_content['steps']:
-                            step = html.escape(step)  # Экранируем специальные символы HTML
+                            step = html.escape(step)
                             story.append(Paragraph(step, styles['CustomNormal']))
                             story.append(Spacer(1, 0.1 * inch))
                         story.append(Indenter(left=-20))
@@ -230,7 +272,6 @@ def create_app():
             page_num = canvas.getPageNumber()
             text = f"'{project['vessel_name']}' inspected by Survzilla Boat Inspection page {page_num} of {total_pages}"
 
-            # Добавление названия лодки и тонкой линии вверху каждой страницы, кроме первой
             canvas.setFont('Helvetica-Bold', 12)
             canvas.drawString(doc.leftMargin, doc.height + doc.topMargin + 35, project['vessel_name'])
             canvas.setStrokeColor(colors.black)
@@ -238,7 +279,6 @@ def create_app():
             canvas.line(doc.leftMargin, doc.height + doc.topMargin + 25, doc.width + doc.leftMargin, doc.height + doc.topMargin + 25)
             canvas.line(doc.leftMargin, doc.height + doc.topMargin + 27, doc.width + doc.leftMargin, doc.height + doc.topMargin + 27)
 
-            # Добавление номера страницы
             canvas.setFont('Helvetica', 10)
             canvas.drawRightString(doc.width + doc.rightMargin, 0.75 * inch, text)
 
@@ -291,6 +331,11 @@ def create_app():
             return render_template("index.html")
     
 
+    @app.route("/cheakglav", methods=["GET"])
+    @requires_auth
+    def go_to_glav(supports_credentials=True):
+            return jsonify({"status": "success"})
+
 
     @app.route("/index2", methods=["POST"])
     @requires_auth
@@ -341,7 +386,6 @@ def create_app():
                     "safety": { "navigational_lights": {"images": [],"steps": []},"life_jackets": {"images": [],"steps": []},"throwable_pfd": {"images": [],"steps": []},"visual_distress_signals": {"images": [],"steps": []},"sound_devices": {"images": [],"steps": []},"uscg_placards": {"images": [],"steps": []},"flame_arrestors": {"images": [],"steps": []},"engine_ventilation": {"images": [],"steps": []},"ignition_protection": {"images": [],"steps": []},"inland_navigational_rule_book": {"images": [],"steps": []},"waste_management_plan": {"images": [],"steps": []},"fire_fighting_equipment": {"images": [],"steps": []},"bilge_pumps": {"images": [],"steps": []},"ground_tackle_windlass": {"images": [],"steps": []},"auxiliary_safety_equipment": {"images": [],"steps": []},
                     },
                 },
-            "sectionse": [],
             "vessel_name": vessel_name,
             "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "user_id": user_id
@@ -355,11 +399,51 @@ def create_app():
 
 
 
+    # Проверка, что текущий пользователь является владельцем проекта
+    def check_project_owner(user_id, project_id):
+        project = app.db.projects.find_one({"_id": ObjectId(project_id), "user_id": user_id})
+        return project is not None
+
+
+    @app.route("/api/update_criticality", methods=["POST"])
+    @requires_auth
+    def update_criticality():
+        user_id = request.user.get('sub')  # Извлекаем user_id из токена
+        data = request.get_json()
+        section = data.get('section')
+        subsection = data.get('subsection')
+        criticality = data.get('criticality')
+        project_id = ObjectId(data.get('project_id'))
+
+        #Проверка подлености клиента
+        if not check_project_owner(user_id, project_id):
+            return jsonify({"status": "error", "message": "Unauthorized access"}), 403
+
+        if not section or not subsection or not criticality:
+            return jsonify({"message": "Missing data"}), 400
+
+        # Обновление критичности в проекте
+        result = app.db.projects.update_one(
+            {"_id": project_id, "user_id": user_id},
+            {"$set": {f"sections.{section}.{subsection}.criticality": criticality}}
+        )
+
+        if result.modified_count == 1:
+            return jsonify({"status": "success"}), 200
+        else:
+            return jsonify({"message": "Failed to update criticality"}), 400
+
 
     #Переключение на проект в главное странице нажатие на имя проекта
     @app.route("/api/EditProject/<string:project_id>", methods=["POST"])
     @requires_auth
     def edit_project(project_id,supports_credentials=True):
+        user_id = request.user.get('sub')
+
+        #Проверка подлености клиента
+        if not check_project_owner(user_id, project_id):
+            return jsonify({"status": "error", "message": "Unauthorized access"}), 403
+
         try:
             # Преобразовываем project_id в ObjectId
             project_id = ObjectId(project_id)
@@ -377,150 +461,23 @@ def create_app():
         print(f"Fetching project with ID: {project_id}", project)
 
         return jsonify({"status": "success", "project": project})
-    
+
+
     @app.route("/EditProject/<project_id>", methods=["GET"])
     def get_projectse_edit_project(project_id,supports_credentials=True):
         return render_template("index.html")
 
-    #Добавление изображения для подразделов стандартных разделов
-    @app.route('/edit_project/upload_image/<project_id>/<section_name>/<subsection_name>', methods=['POST'])
-    @requires_auth
-    def upload_image(project_id, section_name, subsection_name):
-        try:
-            project_id = ObjectId(project_id)
-        except Exception as e:
-            return jsonify({"status": "error", "message": "Invalid project_id"}), 400
-        
-        if 'file' not in request.files:
-            return jsonify({"status": "error", "message": "No file part"}), 400
 
-        file = request.files['file']
-
-        if file.filename == '':
-            return jsonify({"status": "error", "message": "No selected file"}), 400
-
-        if file:
-            file_data = file.read()
-            file_name = file.filename
-            b2_file_name = str(uuid.uuid4())
-
-            bucket.upload_bytes(
-                data_bytes=file_data,
-                file_name=b2_file_name
-            )
-
-            file_info = {
-                'file_name': file_name,
-                'b2_file_name': b2_file_name,
-                'b2_url': 'https://f004.backblazeb2.com/file/Survzila/' + quote(b2_file_name)
-            }
-            app.db.files.insert_one(file_info)
-            print(section_name, subsection_name)
-
-            # Обновление проекта с добавлением информации о загруженном изображении
-            app.db.projects.update_one(
-                {"_id": project_id, f"{section_name}.name": subsection_name},
-                {"$push": {f"{section_name}.$.subsections": {"image_url": file_info['b2_url']}}}
-            )
-
-            updated_project = app.db.projects.find_one({"_id": project_id})
-            updated_project["_id"] = str(updated_project["_id"])
-            
-            return jsonify({
-                "status": "success",
-                "message": "Image uploaded successfully",
-                "image_url": file_info['b2_url'],
-                "updated_project": updated_project
-            }), 200
-        else:
-            return jsonify({"status": "error", "message": "Failed to upload file"}), 400
-        
-
-    #delite
-    @app.route('/edit_project/<project_id>/<section_name>/<subsection_name>/delete_images', methods=['POST'])
-    @requires_auth
-    def delete_images(project_id, section_name, subsection_name):
-        try:
-            project_id = ObjectId(project_id)
-        except Exception as e:
-            return jsonify({"status": "error", "message": "Invalid project_id"}), 400
-        
-        image_url = request.json.get('image_url')
-
-            # Удаление изображения из базы данных проекта
-        result = app.db.projects.update_one(
-            {"_id": project_id, f"{section_name}.name": subsection_name},
-            {"$pull": {f"{section_name}.$.subsections": {"image_url": image_url}}}
-        )
-        updated_project = app.db.projects.find_one({"_id": project_id})
-        updated_project["_id"] = str(updated_project["_id"])
-
-        if result.modified_count > 0:
-            return jsonify({"status": "success", "message": "Image deleted successfully","updated_project": updated_project}), 200
-        else:
-            return jsonify({"status": "error", "message": "Failed to delete image"}), 400
-
-        
-
-    @app.route('/edit_project/<project_id>/<section_name>/<subsection_name>/add_image', methods=['POST'])
-    @requires_auth
-    def add_image(project_id,section_name, subsection_name):
-        try:
-            project_id = ObjectId(project_id)
-        except Exception as e:
-            return jsonify({"status": "error", "message": "Invalid project_id"}), 400
-
-        # Получение файла из запроса
-        if 'file' not in request.files:
-            return jsonify({"status": "error", "message": "No file part"}), 400
-
-        file = request.files['file']
-
-        if file.filename == '':
-            return jsonify({"status": "error", "message": "No selected file"}), 400
-
-        if file:
-            file_data = file.read()
-            file_name = file.filename
-            b2_file_name = str(uuid.uuid4())
-
-            bucket.upload_bytes(
-                data_bytes=file_data,
-                file_name=b2_file_name
-            )
-
-            file_info = {
-                'file_name': file_name,
-                'b2_file_name': b2_file_name,
-                'b2_url': 'https://f004.backblazeb2.com/file/Survzila/' + quote(b2_file_name)
-            }
-
-            print(file_info)
-            # Обновление проекта с добавлением информации о загруженном изображении
-            app.db.projects.update_one(
-                {"_id": project_id, "sectionse.name": section_name, "sectionse.subsections.name": subsection_name},
-                {"$push": {"sectionse.$.subsections.$[elem].images": {"image_url": file_info['b2_url']}}},
-                array_filters=[{"elem.name": subsection_name}]
-            )
-
-            updated_project = app.db.projects.find_one({"_id": project_id})
-            updated_project["_id"] = str(updated_project["_id"])
-            pprint.pprint(updated_project)
-            return jsonify({
-                "status": "success",
-                "message": "Image uploaded successfully",
-                "image_url": file_info['b2_url'],
-                "updated_project": updated_project
-            }), 200
-        else:
-            return jsonify({"status": "error", "message": "Failed to upload file"}), 400
-        
-
-
-    #Дабовление и удаление записей в разделах (нужно переделать)--------------------------------------------------
+    #Дабовление и удаление записей в разделах 
     @app.route("/edit_project/<project_id>/add_step", methods=["POST"])
     @requires_auth
     def add_step(project_id):
+        user_id = request.user.get('sub')
+
+        #Проверка подлености клиента
+        if not check_project_owner(user_id, project_id):
+            return jsonify({"status": "error", "message": "Unauthorized access"}), 403
+        
         try:
             project_id = ObjectId(project_id)
         except Exception as e:
@@ -555,11 +512,19 @@ def create_app():
             return jsonify({"status": "error", "message": "An error occurred"}), 500
 
     
+    
 
     #Добавление изображения в основные подразделы (нужно переделать)-----------------------------------------
     @app.route('/edit_project/<project_id>/add_imagestandard', methods=['POST'])
     @requires_auth
     def add_imagestandard(project_id):
+        user_id = request.user.get('sub')
+
+        #Проверка подлености клиента
+        if not check_project_owner(user_id, project_id):
+            return jsonify({"status": "error", "message": "Unauthorized access"}), 403
+        
+
         try:
             project_id = ObjectId(project_id)
         except Exception as e:
@@ -617,6 +582,13 @@ def create_app():
     @app.route("/edit_project/<project_id>/remove_image", methods=["POST"])
     @requires_auth
     def remove_image(project_id):
+        user_id = request.user.get('sub')
+
+        #Проверка подлености клиента
+        if not check_project_owner(user_id, project_id):
+            return jsonify({"status": "error", "message": "Unauthorized access"}), 403
+        
+
         try:
             project_id = ObjectId(project_id)
         except Exception as e:
@@ -652,6 +624,13 @@ def create_app():
     @app.route("/edit_project/<project_id>/remove_step", methods=["POST"])
     @requires_auth
     def remove_step(project_id):
+        user_id = request.user.get('sub')
+
+        #Проверка подлености клиента
+        if not check_project_owner(user_id, project_id):
+            return jsonify({"status": "error", "message": "Unauthorized access"}), 403
+        
+
         try:
             project_id = ObjectId(project_id)
         except Exception as e:
@@ -689,6 +668,13 @@ def create_app():
     @app.route("/edit_project/<project_id>/add_section", methods=["POST"])
     @requires_auth
     def add_section(project_id):
+        user_id = request.user.get('sub')
+
+        #Проверка подлености клиента
+        if not check_project_owner(user_id, project_id):
+            return jsonify({"status": "error", "message": "Unauthorized access"}), 403
+        
+
         try:
             project_id = ObjectId(project_id)
         except Exception as e:
@@ -716,6 +702,13 @@ def create_app():
     @app.route("/edit_project/<project_id>/add_subsection", methods=["POST"])
     @requires_auth
     def add_subsection(project_id):
+        user_id = request.user.get('sub')
+
+        #Проверка подлености клиента
+        if not check_project_owner(user_id, project_id):
+            return jsonify({"status": "error", "message": "Unauthorized access"}), 403
+        
+
         try:
             project_id = ObjectId(project_id)
         except Exception as e:
@@ -751,6 +744,12 @@ def create_app():
     @app.route('/edit_project/<project_id>/get-gpt-recommendations', methods=['POST'])
     @requires_auth
     def get_gpt_recommendations(project_id):
+        user_id = request.user.get('sub')
+
+        #Проверка подлености клиента
+        if not check_project_owner(user_id, project_id):
+            return jsonify({"status": "error", "message": "Unauthorized access"}), 403
+        
         data = request.json
         section = data['section']
         subsection = data['subsection']
@@ -773,6 +772,159 @@ def create_app():
             traceback.print_exc()
             return jsonify({'error': str(e)}), 500
             
+
+
+    @app.route("/api/add_to_showcase", methods=["POST"])
+    @requires_auth
+    def add_to_showcase():
+        user_id = request.user.get('sub')  # Extract user_id from token
+        data = request.form.to_dict()
+        project_id = ObjectId(data.get('project_id'))
+        price = data.get('price')
+        file = request.files.get('file')
+
+        if not check_project_owner(user_id, project_id):
+            return jsonify({"status": "error", "message": "Unauthorized access"}), 403
+
+        if not project_id or not price or not file:
+            return jsonify({"message": "Missing project_id, price, or file"}), 400
+
+        project = app.db.projects.find_one({"_id": project_id, "user_id": user_id})
+        if not project:
+            return jsonify({"message": "Project not found"}), 404
+
+        # Upload the file to Backblaze B2
+        b2_file_name = str(uuid.uuid4())
+        b2_file = bucket.upload_bytes(file.read(), b2_file_name)
+        file_info = {
+            'b2_url': f'https://f004.backblazeb2.com/file/{bucket_name_b2}/{quote(b2_file_name)}'
+        }
+
+        vitrine_data = {
+            "vessel_name": project['vessel_name'],
+            "gen_info_image": file_info["b2_url"],
+            "user_id": user_id,
+            "project_id": project_id,
+            "price": price,
+            "access_list": [user_id]
+        }
+
+        existing_entry = app.db.vitrine.find_one({"project_id": project_id})
+        if existing_entry:
+            result = app.db.vitrine.update_one(
+                {"project_id": project_id},
+                {"$set": vitrine_data}
+            )
+            if result.modified_count > 0:
+                return jsonify({"status": "success", "message": "Project updated in showcase"}), 200
+            else:
+                return jsonify({"message": "Failed to update project in showcase"}), 400
+        else:
+            result = app.db.vitrine.insert_one(vitrine_data)
+            if result.inserted_id:
+                return jsonify({"status": "success", "message": "Project added to showcase"}), 200
+            else:
+                return jsonify({"message": "Failed to add project to showcase"}), 400
+        
+
+    #Просмотр проектов с ветрины
+    @app.route("/api/project/<project_id>", methods=["GET"])
+    @requires_auth
+    def get_project(project_id):
+        user_id = request.user.get('sub')  # Extract user_id from token
+
+        try:
+            project_id = ObjectId(project_id)
+        except Exception as e:
+            return jsonify({"status": "error", "message": "Invalid project_id"}), 400
+
+        project_vitrine = app.db.vitrine.find_one({"project_id": project_id})
+        if not project_vitrine:
+            return jsonify({"status": "error", "message": "Project not found"}), 404
+        
+        # Check if the user is in the access_list
+        if user_id not in project_vitrine.get("access_list", []):
+            return jsonify({"status": "error", "message": "Access denied"}), 403
+
+        project = app.db.projects.find_one({"_id": project_id})
+        if not project:
+            return jsonify({"status": "error", "message": "Project not found"}), 404
+
+        project["_id"] = str(project["_id"])
+        return jsonify({"status": "success", "project": project}), 200
+
+
+    
+    stripe.api_key = "STRIPE_PK"
+    endpoint_secret = 'STRIPE_WEBHOOK'
+
+    @app.route("/api/check_access/<project_id>", methods=["GET"])
+    @requires_auth
+    def check_access(project_id):
+        user_id = request.user.get('sub')  # Extract user_id from token
+        project_id = ObjectId(project_id)
+
+        project = app.db.vitrine.find_one({"project_id": project_id})
+        if not project:
+            return jsonify({"message": "Project not found"}), 404
+
+        if user_id in project.get("access_list", []):
+            return jsonify({"access": True}), 200
+
+        session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            line_items=[{
+                'price_data': {
+                    'currency': 'usd',
+                    'product_data': {
+                        'name': project['vessel_name'],
+                    },
+                    'unit_amount': 1000,
+                },
+                'quantity': 1,
+            }],
+            mode='payment',
+            success_url=f'https://survzilla.onrender.com/viewproject/{project_id}',
+            cancel_url="https://survzilla.onrender.com/",
+            metadata={
+                'user_id': user_id,
+                'project_id': str(project_id)
+            }
+        )
+
+        return jsonify({"access": False, "sessionId": session.id}), 200
+
+    @app.route('/webhook', methods=['POST'])
+    def stripe_webhook():
+        payload = request.get_data(as_text=True)
+        sig_header = request.headers.get('Stripe-Signature')
+
+        event = None
+
+        try:
+            event = stripe.Webhook.construct_event(
+                payload, sig_header, endpoint_secret
+            )
+        except ValueError as e:
+            return jsonify(success=False, error=str(e)), 400
+        except stripe.error.SignatureVerificationError as e:
+            return jsonify(success=False, error=str(e)), 400
+
+        if event['type'] == 'checkout.session.completed':
+            session = event['data']['object']
+            user_id = session['metadata']['user_id']
+            project_id = ObjectId(session['metadata']['project_id'])
+
+            app.db.vitrine.update_one(
+                {"project_id": project_id},
+                {"$push": {"access_list": user_id}}
+            )
+            print(f"User {user_id} added to access list of project {project_id}")
+
+        return jsonify(success=True), 200
+
+
+
 
     if __name__ == "__main__":
         app.run(debug=True)
