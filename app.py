@@ -781,13 +781,14 @@ def create_app():
         data = request.form.to_dict()
         project_id = ObjectId(data.get('project_id'))
         price = data.get('price')
+        description = data.get('description')
         file = request.files.get('file')
 
         if not check_project_owner(user_id, project_id):
             return jsonify({"status": "error", "message": "Unauthorized access"}), 403
 
-        if not project_id or not price or not file:
-            return jsonify({"message": "Missing project_id, price, or file"}), 400
+        if not project_id or not price or not description or not file:
+            return jsonify({"message": "Missing project_id, price, description, or file"}), 400
 
         project = app.db.projects.find_one({"_id": project_id, "user_id": user_id})
         if not project:
@@ -806,6 +807,8 @@ def create_app():
             "user_id": user_id,
             "project_id": project_id,
             "price": price,
+            "city": project['city'],
+            "description": description,
             "access_list": [user_id]
         }
 
