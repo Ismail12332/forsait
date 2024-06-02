@@ -855,8 +855,8 @@ def create_app():
 
 
     
-    stripe.api_key = "STRIPE_PK"
-    endpoint_secret = 'STRIPE_WEBHOOK'
+    stripe.api_key = os.getenv("STRIPE_PK")
+    endpoint_secret = os.getenv('STRIPE_WEBHOOK')
 
     @app.route("/api/check_access/<project_id>", methods=["GET"])
     @requires_auth
