@@ -899,6 +899,10 @@ def create_app():
         payload = request.get_data(as_text=True)
         sig_header = request.headers.get('Stripe-Signature')
 
+        # Log the payload and signature header for debugging
+        print(f"Payload: {payload}")
+        print(f"Signature Header: {sig_header}")
+
         event = None
 
         try:
@@ -906,8 +910,10 @@ def create_app():
                 payload, sig_header, endpoint_secret
             )
         except ValueError as e:
+            print(f"ValueError: {e}")
             return jsonify(success=False, error=str(e)), 400
         except stripe.error.SignatureVerificationError as e:
+            print(f"SignatureVerificationError: {e}")
             return jsonify(success=False, error=str(e)), 400
 
         if event['type'] == 'checkout.session.completed':
