@@ -834,6 +834,11 @@ def create_app():
     @app.route("/yachtpreview/<project_id>", methods=["GET"])
     def yeacht_project(project_id):
         return render_template("index.html")
+    
+    
+    @app.route("/viewproject/<project_id>", methods=["GET"])
+    def yview_project(project_id):
+        return render_template("index.html")
 
 
     #предварительной просмотр проекта
