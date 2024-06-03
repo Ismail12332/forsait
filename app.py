@@ -887,8 +887,8 @@ def create_app():
                 'quantity': 1,
             }],
             mode='payment',
-            success_url=f'https://survzilla.onrender.com/viewproject/{project_id}',
-            cancel_url="https://survzilla.onrender.com/",
+            success_url=f'https://verboat.com/viewproject/{project_id}',
+            cancel_url="https://verboat.com/",
             metadata={
                 'user_id': user_id,
                 'project_id': str(project_id)
