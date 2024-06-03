@@ -828,6 +828,25 @@ def create_app():
                 return jsonify({"status": "success", "message": "Project added to showcase"}), 200
             else:
                 return jsonify({"message": "Failed to add project to showcase"}), 400
+            
+
+
+    #предварительной просмотр проекта
+    @app.route("/api/preview/<project_id>", methods=["GET"])
+    def preview_project(project_id):
+        try:
+            project_id = ObjectId(project_id)
+        except Exception as e:
+            return jsonify({"status": "error", "message": "Invalid project_id"}), 400
+
+        project = app.db.vitrine.find_one({"project_id": project_id})
+        if not project:
+            return jsonify({"status": "error", "message": "Project not found"}), 404
+
+        # Convert ObjectId to string for JSON serialization
+        project["_id"] = str(project["_id"])
+        project["project_id"] = str(project["project_id"])
+        return jsonify({"status": "success", "project": project}), 200
         
 
     #Просмотр проектов с ветрины
