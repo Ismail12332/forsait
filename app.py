@@ -832,7 +832,7 @@ def create_app():
 
 
     @app.route("/yachtpreview/<project_id>", methods=["GET"])
-    def yeacht_project():
+    def yeacht_project(project_id):
         return render_template("index.html")
 
 
