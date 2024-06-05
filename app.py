@@ -413,14 +413,14 @@ def create_app():
     @app.route("/api/update_criticality", methods=["POST"])
     @requires_auth
     def update_criticality():
-        user_id = request.user.get('sub')  # Извлекаем user_id из токена
+        user_id = request.user.get('sub')
         data = request.get_json()
         section = data.get('section')
         subsection = data.get('subsection')
         criticality = data.get('criticality')
         project_id = ObjectId(data.get('project_id'))
 
-        #Проверка подлености клиента
+        # Проверка подлинности клиента
         if not check_project_owner(user_id, project_id):
             return jsonify({"status": "error", "message": "Unauthorized access"}), 403
 
