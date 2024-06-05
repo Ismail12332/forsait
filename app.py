@@ -790,7 +790,7 @@ def create_app():
         }
 
         vitrine_data = {
-            "vessel_name": project['vessel_name'],
+            "vessel_name": project['boat_model'],
             "gen_info_image": file_info["b2_url"],
             "user_id": user_id,
             "project_id": project_id,
