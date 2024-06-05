@@ -344,57 +344,62 @@ def create_app():
         data = request.json  # Получаем данные из JSON-запроса
         # Обновляем запрос к базе данных, чтобы фильтровать проекты по user_id
         projects = app.db.projects.find({"user_id": user_id})
-        projects_list = convert_projects_to_list(projects)
 
-        first_name = data.get("first_name")
-        last_name = data.get("last_name")
-        city = data.get("city")
-        phone = data.get("phone")
-        post = data.get("post")
-        vessel_name = data.get("vessel_name")
+        boat_make = data.get('boat_make')
+        boat_model = data.get('boat_model')
+        boat_registration = data.get('boat_registration')
+        length = data.get('length')
+        year = data.get('year')
+        engine = data.get('engine')
+        price = data.get('price')
+        city = data.get('city')
+        owner_contact = data.get('owner_contact')
 
         # Создаем проект
         project = {
-            "first_name": first_name,
-            "last_name": last_name,
-            "city": city,
-            "phone": phone,
-            "post": post,
-            "sections": {
-                    "introduction": {"gen_info": {"images": [],"steps": []},"certification": {"images": [],"steps": []},"purpose_of_survey": {"images": [],"steps": []},"circumstances_of_survey": {"images": [],"steps": []},"report_file_no": {"images": [],"steps": []},"surveyor_qualifications": { "images": [],"steps": []},"intended_use": {"images": [],"steps": []},
-                    },
-                    "hull": { "layout_overview": {"images": [],"steps": []},"design": {"images": [],"steps": []},"deck": {"images": [],"steps": []},"structural_members": {"images": [],"steps": []},"bottom_paint": {"images": [],"steps": []},"blister_comment": {"images": [],"steps": []},"transom": {"images": [],"steps": []},
-                    },
-                    "above": { "deck_floor_plan": {"images": [],"steps": []},"anchor_platform": {"images": [],"steps": []},"toe_rails": {"images": [],"steps": []},"mooring_hardware": {"images": [],"steps": []},"hatches": {"images": [],"steps": []},"exterior_seating": {"images": [],"steps": []},"cockpit_equipment": {"images": [],"steps": []},"ngine_hatch": {"images": [],"steps": []},"above_draw_water_line": {"images": [],"steps": []},"boarding_ladder": {"images": [],"steps": []},"swim_platform": {"images": [],"steps": []},
-                    },
-                    "below": { "below_draw_water": {"images": [],"steps": []},"thru_hull_strainers": {"images": [],"steps": []},"transducer": {"images": [],"steps": []},"sea_valves": {"images": [],"steps": []},"sea_strainers": {"images": [],"steps": []},"trim_tabs": {"images": [],"steps": []},"note": {"images": [],"steps": []},
-                    },
-                    "cathodic": { "bonding_system": {"images": [],"steps": []},"anodes": {"images": [],"steps": []},"lightning_protection": {"images": [],"steps": []},"additional_remarks": {"images": [],"steps": []},
-                    },
-                    "helm": { "helm_station": {"images": [],"steps": []},"throttle_shift_controls": {"images": [],"steps": []},"engine_room_blowers": {"images": [],"steps": []},"engine_status": {"images": [],"steps": []},"other_electronics_controls": {"images": [],"steps": []},
-                    },
-                    "cabin": { "entertainment_berthing": {"images": [],"steps": []},"interior_lighting": {"images": [],"steps": []},"galley_dinette": {"images": [],"steps": []},"water_closets": {"images": [],"steps": []},"climate_control": {"images": [],"steps": []},
-                    },
-                    "electrical": { "dc_systems_type": {"images": [],"steps": []},"ac_systems": {"images": [],"steps": []},"generator": {"images": [],"steps": []},
-                    },
-                    "inboard": { "engines": {"images": [],"steps": []},"serial_numbers": {"images": [],"steps": []},"engine_hours": {"images": [],"steps": []},"other_note": {"images": [],"steps": []},"reverse_gears": {"images": [],"steps": []},"shafting_propellers": {"images": [],"steps": []},
-                    },
-                    "steering": { "manufacture": {"images": [],"steps": []},"steering_components": {"images": [],"steps": []},
-                    },
-                    "tankage": { "fuel": {"images": [],"steps": []},"potable_water_system": {"images": [],"steps": []},"holding_tank_black_water": {"images": [],"steps": []},
-                    },
-                    "safety": { "navigational_lights": {"images": [],"steps": []},"life_jackets": {"images": [],"steps": []},"throwable_pfd": {"images": [],"steps": []},"visual_distress_signals": {"images": [],"steps": []},"sound_devices": {"images": [],"steps": []},"uscg_placards": {"images": [],"steps": []},"flame_arrestors": {"images": [],"steps": []},"engine_ventilation": {"images": [],"steps": []},"ignition_protection": {"images": [],"steps": []},"inland_navigational_rule_book": {"images": [],"steps": []},"waste_management_plan": {"images": [],"steps": []},"fire_fighting_equipment": {"images": [],"steps": []},"bilge_pumps": {"images": [],"steps": []},"ground_tackle_windlass": {"images": [],"steps": []},"auxiliary_safety_equipment": {"images": [],"steps": []},
-                    },
-                },
-            "vessel_name": vessel_name,
+            'user_id': user_id,
+            'boat_make': boat_make,
+            'boat_model': boat_model,
+            'boat_registration': boat_registration,
+            'length': length,
+            'year': year,
+            'engine': engine,
+            'price': price,
+            'city': city,
+            'owner_contact': owner_contact,
             "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "user_id": user_id
+            "sections": {
+                    "introduction": {"gen_info": {},"certification": {},"purpose_of_survey": {},"circumstances_of_survey": {},"report_file_no": {},"surveyor_qualifications": { },"intended_use": {},
+                    },
+                    "hull": { "layout_overview": {},"design": {},"deck": {},"structural_members": {},"bottom_paint": {},"blister_comment": {},"transom": {},
+                    },
+                    "above": { "deck_floor_plan": {},"anchor_platform": {},"toe_rails": {},"mooring_hardware": {},"hatches": {},"exterior_seating": {},"cockpit_equipment": {},"ngine_hatch": {},"above_draw_water_line": {},"boarding_ladder": {},"swim_platform": {},
+                    },
+                    "below": { "below_draw_water": {},"thru_hull_strainers": {},"transducer": {},"sea_valves": {},"sea_strainers": {},"trim_tabs": {},"note": {},
+                    },
+                    "cathodic": { "bonding_system": {},"anodes": {},"lightning_protection": {},"additional_remarks": {},
+                    },
+                    "helm": { "helm_station": {},"throttle_shift_controls": {},"engine_room_blowers": {},"engine_status": {},"other_electronics_controls": {},
+                    },
+                    "cabin": { "entertainment_berthing": {},"interior_lighting": {},"galley_dinette": {},"water_closets": {},"climate_control": {},
+                    },
+                    "electrical": { "dc_systems_type": {},"ac_systems": {},"generator": {},
+                    },
+                    "inboard": { "engines": {},"serial_numbers": {},"engine_hours": {},"other_note": {},"reverse_gears": {},"shafting_propellers": {},
+                    },
+                    "steering": { "manufacture": {},"steering_components": {},
+                    },
+                    "tankage": { "fuel": {},"potable_water_system": {},"holding_tank_black_water": {},
+                    },
+                    "safety": { "navigational_lights": {},"life_jackets": {},"throwable_pfd": {},"visual_distress_signals": {},"sound_devices": {},"uscg_placards": {},"flame_arrestors": {},"engine_ventilation": {},"ignition_protection": {},"inland_navigational_rule_book": {},"waste_management_plan": {},"fire_fighting_equipment": {},"bilge_pumps": {},"ground_tackle_windlass": {},"auxiliary_safety_equipment": {},
+                    },
+                }
         }
 
         result = app.db.projects.insert_one(project)
         project_id = result.inserted_id
 
-        print("Entry added:", first_name, last_name, city, phone, post, vessel_name, user_id, project_id, projects_list)
+        print("Entry added:", boat_make, boat_model, city, boat_registration, length, engine, user_id, project_id,price)
         return jsonify({"status": "success", "user_id": str(user_id), "project_id": str(project_id)})
 
 
@@ -474,10 +479,9 @@ def create_app():
     def add_step(project_id):
         user_id = request.user.get('sub')
 
-        #Проверка подлености клиента
         if not check_project_owner(user_id, project_id):
             return jsonify({"status": "error", "message": "Unauthorized access"}), 403
-        
+
         try:
             project_id = ObjectId(project_id)
         except Exception as e:
@@ -486,24 +490,20 @@ def create_app():
         data = request.json
         section = data.get("section")
         subsection = data.get("subsection")
+        element = data.get("element")
         step_description = data.get("step_description")
-        print(section,subsection,step_description)
+        print(section,subsection,element,step_description)
 
         try:
-            # Обновляем структуру базы данных, чтобы каждый раздел содержал список подразделов,
-            # а каждый подраздел содержал список шагов
             result = app.db.projects.update_one(
-                {"_id": project_id, f"sections.{section}.{subsection}": {"$exists": True}},
-                {"$push": {f"sections.{section}.{subsection}.steps": step_description}}
+                {"_id": project_id, f"sections.{section}.{subsection}.{element}": {"$exists": True}},
+                {"$push": {f"sections.{section}.{subsection}.{element}.steps": step_description}}
             )
 
             if result.modified_count == 0:
-                return jsonify({"status": "error", "message": "Project or section not found"}), 404
+                return jsonify({"status": "error", "message": "Project, section, subsection or element not found"}), 404
 
-            # Получаем обновленный проект после добавления шага
             updated_project = app.db.projects.find_one({"_id": project_id})
-
-            # Преобразуем ObjectId в строку перед возвратом ответа JSON
             updated_project["_id"] = str(updated_project["_id"])
 
             return jsonify({"status": "success", "message": "Step added successfully", "updated_project": updated_project})
@@ -515,22 +515,19 @@ def create_app():
     
 
     #Добавление изображения в основные подразделы (нужно переделать)-----------------------------------------
-    @app.route('/edit_project/<project_id>/add_imagestandard', methods=['POST'])
+    @app.route('/edit_project/<project_id>/add_image', methods=['POST'])
     @requires_auth
-    def add_imagestandard(project_id):
+    def add_image(project_id):
         user_id = request.user.get('sub')
 
-        #Проверка подлености клиента
         if not check_project_owner(user_id, project_id):
             return jsonify({"status": "error", "message": "Unauthorized access"}), 403
-        
 
         try:
             project_id = ObjectId(project_id)
         except Exception as e:
             return jsonify({"status": "error", "message": "Invalid project_id"}), 400
 
-        # Получение файла из запроса
         if 'image_upload' not in request.files:
             return jsonify({"status": "error", "message": "No file part"}), 400
 
@@ -556,15 +553,14 @@ def create_app():
             }
             app.db.files.insert_one(file_info)
 
-            # Получение описания изображения и раздела
             section = request.form.get('section')
             subsection = request.form.get("subsection")
-            print(section,subsection)
-            section_field = f"{section}_steps"
-            # Обновление проекта с добавлением информации о загруженном изображении
+            element = request.form.get("element")
+            print(section,subsection,element,file_info["b2_url"])
+
             app.db.projects.update_one(
-                {"_id": project_id, f"sections.{section}.{subsection}": {"$exists": True}},
-                {"$push": {f"sections.{section}.{subsection}.images": file_info["b2_url"]}}
+                {"_id": project_id, f"sections.{section}.{subsection}.{element}": {"$exists": True}},
+                {"$push": {f"sections.{section}.{subsection}.{element}.images": file_info["b2_url"]}}
             )
 
             updated_project = app.db.projects.find_one({"_id": project_id})
@@ -584,10 +580,8 @@ def create_app():
     def remove_image(project_id):
         user_id = request.user.get('sub')
 
-        #Проверка подлености клиента
         if not check_project_owner(user_id, project_id):
             return jsonify({"status": "error", "message": "Unauthorized access"}), 403
-        
 
         try:
             project_id = ObjectId(project_id)
@@ -597,22 +591,19 @@ def create_app():
         data = request.json
         section = data.get("section")
         subsection = data.get("subsection")
+        element = data.get("element")
         image = data.get("image")
 
         try:
-            # Удаляем изображение из списка
             result = app.db.projects.update_one(
-                {"_id": project_id, f"sections.{section}.{subsection}.images": image},
-                {"$pull": {f"sections.{section}.{subsection}.images": image}}
+                {"_id": project_id, f"sections.{section}.{subsection}.{element}.images": image},
+                {"$pull": {f"sections.{section}.{subsection}.{element}.images": image}}
             )
 
             if result.modified_count == 0:
                 return jsonify({"status": "error", "message": "Image not found"}), 404
 
-            # Получаем обновленный проект после удаления изображения
             updated_project = app.db.projects.find_one({"_id": project_id})
-
-            # Преобразуем ObjectId в строку перед возвратом ответа JSON
             updated_project["_id"] = str(updated_project["_id"])
 
             return jsonify({"status": "success", "message": "Image removed successfully", "updated_project": updated_project})
@@ -626,10 +617,8 @@ def create_app():
     def remove_step(project_id):
         user_id = request.user.get('sub')
 
-        #Проверка подлености клиента
         if not check_project_owner(user_id, project_id):
             return jsonify({"status": "error", "message": "Unauthorized access"}), 403
-        
 
         try:
             project_id = ObjectId(project_id)
@@ -639,22 +628,21 @@ def create_app():
         data = request.json
         section = data.get("section")
         subsection = data.get("subsection")
+        element = data.get("element")
         step_description = data.get("step_description")
+        print(section,subsection,element,step_description)
+        
 
         try:
-            # Выполните удаление шага из базы данных
             result = app.db.projects.update_one(
-                {"_id": project_id, f"sections.{section}.{subsection}.steps": step_description},
-                {"$pull": {f"sections.{section}.{subsection}.steps": step_description}}
+                {"_id": project_id, f"sections.{section}.{subsection}.{element}.steps": step_description},
+                {"$pull": {f"sections.{section}.{subsection}.{element}.steps": step_description}}
             )
 
             if result.modified_count == 0:
                 return jsonify({"status": "error", "message": "Step not found"}), 404
 
-            # Получите обновленный проект после удаления шага
             updated_project = app.db.projects.find_one({"_id": project_id})
-
-            # Преобразуйте ObjectId в строку перед возвратом ответа JSON
             updated_project["_id"] = str(updated_project["_id"])
 
             return jsonify({"status": "success", "message": "Step removed successfully", "updated_project": updated_project})
@@ -726,7 +714,7 @@ def create_app():
             # Добавляем новый подраздел в выбранный раздел
             result = app.db.projects.update_one(
                 {"_id": project_id},
-                {"$set": {f"sections.{section_name}.{subsection_name}": {"images": [], "steps": []}}}
+                {"$set": {f"sections.{section_name}.{subsection_name}": {}}}
             )
             if result.modified_count == 0:
                 return jsonify({"status": "error", "message": "Project or section not found"}), 404
@@ -962,7 +950,42 @@ def create_app():
         return jsonify(success=True), 200
 
 
+    #Add Element
+    @app.route("/edit_project/<project_id>/add_element", methods=["POST"])
+    @requires_auth
+    def add_element(project_id):
+        user_id = request.user.get('sub')
 
+        if not check_project_owner(user_id, project_id):
+            return jsonify({"status": "error", "message": "Unauthorized access"}), 403
+
+        try:
+            project_id = ObjectId(project_id)
+        except Exception as e:
+            return jsonify({"status": "error", "message": "Invalid project_id"}), 400
+
+        data = request.json
+        section = data.get("section")
+        subsection = data.get("subsection")
+        element_name = data.get("element_name")
+
+        try:
+            result = app.db.projects.update_one(
+                {"_id": project_id},
+                {"$set": {f"sections.{section}.{subsection}.{element_name}": {"images": [], "steps": []}}}
+            )
+
+            if result.modified_count == 0:
+                return jsonify({"status": "error", "message": "Project or section or subsection not found"}), 404
+
+            updated_project = app.db.projects.find_one({"_id": project_id})
+            updated_project["_id"] = str(updated_project["_id"])
+
+            return jsonify({"status": "success", "message": "Element added successfully", "updated_project": updated_project})
+        except Exception as e:
+            print("Error:", e)
+            return jsonify({"status": "error", "message": "An error occurred"}), 500
+        
 
     if __name__ == "__main__":
         app.run(debug=True)
