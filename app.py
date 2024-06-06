@@ -900,7 +900,7 @@ def create_app():
                     'product_data': {
                         'name': project['vessel_name'],
                     },
-                    'unit_amount': 1000,
+                    'unit_amount': 100,
                 },
                 'quantity': 1,
             }],
