@@ -417,6 +417,7 @@ def create_app():
         data = request.get_json()
         section = data.get('section')
         subsection = data.get('subsection')
+        element = data.get('element')
         criticality = data.get('criticality')
         project_id = ObjectId(data.get('project_id'))
 
@@ -424,13 +425,13 @@ def create_app():
         if not check_project_owner(user_id, project_id):
             return jsonify({"status": "error", "message": "Unauthorized access"}), 403
 
-        if not section or not subsection or not criticality:
+        if not section or not subsection or not element or not criticality:
             return jsonify({"message": "Missing data"}), 400
 
-        # Обновление критичности в проекте
+        # Обновление критичности в элементе
         result = app.db.projects.update_one(
             {"_id": project_id, "user_id": user_id},
-            {"$set": {f"sections.{section}.{subsection}.criticality": criticality}}
+            {"$set": {f"sections.{section}.{subsection}.{element}.criticality": criticality}}
         )
 
         if result.modified_count == 1:
