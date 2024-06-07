@@ -29,6 +29,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 import html
 import time
 import stripe
+import io
 import random
 import string
 
@@ -884,12 +885,17 @@ def create_app():
         
 
     #Просмотр проектов с ветрины
-    @app.route("/api/project/<project_code>", methods=["GET"])
+    @app.route("/api/project/<project_id>", methods=["GET"])
     @requires_auth
-    def get_project_by_code(project_code):
+    def get_project(project_id):
         user_id = request.user.get('sub')  # Extract user_id from token
 
-        project_vitrine = app.db.vitrine.find_one({"project_code": project_code})
+        try:
+            project_id = ObjectId(project_id)
+        except Exception as e:
+            return jsonify({"status": "error", "message": "Invalid project_id"}), 400
+
+        project_vitrine = app.db.vitrine.find_one({"project_id": project_id})
         if not project_vitrine:
             return jsonify({"status": "error", "message": "Project not found"}), 404
         
@@ -897,7 +903,6 @@ def create_app():
         if user_id not in project_vitrine.get("access_list", []):
             return jsonify({"status": "error", "message": "Access denied"}), 403
 
-        project_id = project_vitrine["project_id"]
         project = app.db.projects.find_one({"_id": project_id})
         if not project:
             return jsonify({"status": "error", "message": "Project not found"}), 404
