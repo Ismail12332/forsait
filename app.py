@@ -29,7 +29,6 @@ from reportlab.pdfbase.ttfonts import TTFont
 import html
 import time
 import stripe
-import io
 import random
 import string
 
