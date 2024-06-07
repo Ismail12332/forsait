@@ -29,6 +29,9 @@ from reportlab.pdfbase.ttfonts import TTFont
 import html
 import time
 import stripe
+import io
+import random
+import string
 
 load_dotenv()
 
@@ -344,6 +347,7 @@ def create_app():
         data = request.json  # Получаем данные из JSON-запроса
         # Обновляем запрос к базе данных, чтобы фильтровать проекты по user_id
         projects = app.db.projects.find({"user_id": user_id})
+        projects_list = convert_projects_to_list(projects)
 
         boat_make = data.get('boat_make')
         boat_model = data.get('boat_model')
@@ -354,6 +358,7 @@ def create_app():
         price = data.get('price')
         city = data.get('city')
         owner_contact = data.get('owner_contact')
+        project_code = generate_unique_code(app.db.projects)
 
         # Создаем проект
         project = {
@@ -368,6 +373,7 @@ def create_app():
             'city': city,
             'owner_contact': owner_contact,
             "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "project_code": project_code,
             "sections": {
                     "introduction": {"gen_info": {},"certification": {},"purpose_of_survey": {},"circumstances_of_survey": {},"report_file_no": {},"surveyor_qualifications": { },"intended_use": {},
                     },
@@ -401,6 +407,18 @@ def create_app():
 
         print("Entry added:", boat_make, boat_model, city, boat_registration, length, engine, user_id, project_id,price)
         return jsonify({"status": "success", "user_id": str(user_id), "project_id": str(project_id)})
+
+
+
+    def generate_random_code(length=8):
+        characters = string.ascii_uppercase + string.digits
+        return ''.join(random.choice(characters) for _ in range(length))
+
+    def generate_unique_code(collection, length=8):
+        while True:
+            code = generate_random_code(length)
+            if not collection.find_one({"project_code": code}):
+                return code
 
 
 
@@ -771,23 +789,32 @@ def create_app():
         project_id = ObjectId(data.get('project_id'))
         price = data.get('price')
         description = data.get('description')
+        final_note = data.get('final_note')
         file = request.files.get('file')
+        final_kartinka = request.files.get('final_kartinka')
+        print(final_note, final_kartinka, file)
 
         if not check_project_owner(user_id, project_id):
             return jsonify({"status": "error", "message": "Unauthorized access"}), 403
 
-        if not project_id or not price or not description or not file:
-            return jsonify({"message": "Missing project_id, price, description, or file"}), 400
+        if not project_id or not price or not description or not file or not final_note or not final_kartinka:
+            return jsonify({"message": "Missing project_id, price, description, file, final_note, or final_kartinka"}), 400
 
         project = app.db.projects.find_one({"_id": project_id, "user_id": user_id})
         if not project:
             return jsonify({"message": "Project not found"}), 404
 
-        # Upload the file to Backblaze B2
+        # Upload the files to Backblaze B2
         b2_file_name = str(uuid.uuid4())
         b2_file = bucket.upload_bytes(file.read(), b2_file_name)
         file_info = {
             'b2_url': f'https://f004.backblazeb2.com/file/{bucket_name_b2}/{quote(b2_file_name)}'
+        }
+
+        b2_final_kartinka_name = str(uuid.uuid4())
+        b2_final_kartinka = bucket.upload_bytes(final_kartinka.read(), b2_final_kartinka_name)
+        final_kartinka_info = {
+            'b2_url': f'https://f004.backblazeb2.com/file/{bucket_name_b2}/{quote(b2_final_kartinka_name)}'
         }
 
         vitrine_data = {
@@ -798,8 +825,22 @@ def create_app():
             "price": price,
             "city": project['city'],
             "description": description,
+            "year": project['year'],
+            "project_code": project['project_code'],  # Добавляем код проекта
             "access_list": [user_id]
         }
+
+        project_update_data = {
+            "final_note": final_note,
+            "final_kartinka": final_kartinka_info["b2_url"],
+            "description": description,
+        }
+
+        # Update the project with final_note and final_kartinka
+        app.db.projects.update_one(
+            {"_id": project_id},
+            {"$set": project_update_data}
+        )
 
         existing_entry = app.db.vitrine.find_one({"project_id": project_id})
         if existing_entry:
@@ -831,14 +872,9 @@ def create_app():
 
 
     #предварительной просмотр проекта
-    @app.route("/api/preview/<project_id>", methods=["GET"])
-    def preview_project(project_id):
-        try:
-            project_id = ObjectId(project_id)
-        except Exception as e:
-            return jsonify({"status": "error", "message": "Invalid project_id"}), 400
-
-        project = app.db.vitrine.find_one({"project_id": project_id})
+    @app.route("/api/preview/<project_code>", methods=["GET"])
+    def preview_project_by_code(project_code):
+        project = app.db.vitrine.find_one({"project_code": project_code})
         if not project:
             return jsonify({"status": "error", "message": "Project not found"}), 404
 
@@ -849,17 +885,12 @@ def create_app():
         
 
     #Просмотр проектов с ветрины
-    @app.route("/api/project/<project_id>", methods=["GET"])
+    @app.route("/api/project/<project_code>", methods=["GET"])
     @requires_auth
-    def get_project(project_id):
+    def get_project_by_code(project_code):
         user_id = request.user.get('sub')  # Extract user_id from token
 
-        try:
-            project_id = ObjectId(project_id)
-        except Exception as e:
-            return jsonify({"status": "error", "message": "Invalid project_id"}), 400
-
-        project_vitrine = app.db.vitrine.find_one({"project_id": project_id})
+        project_vitrine = app.db.vitrine.find_one({"project_code": project_code})
         if not project_vitrine:
             return jsonify({"status": "error", "message": "Project not found"}), 404
         
@@ -867,6 +898,7 @@ def create_app():
         if user_id not in project_vitrine.get("access_list", []):
             return jsonify({"status": "error", "message": "Access denied"}), 403
 
+        project_id = project_vitrine["project_id"]
         project = app.db.projects.find_one({"_id": project_id})
         if not project:
             return jsonify({"status": "error", "message": "Project not found"}), 404
