@@ -818,7 +818,7 @@ def create_app():
         }
 
         vitrine_data = {
-            "vessel_name": project['boat_model'],
+            "vessel_name": f"{project['boat_make']} {project['boat_model']} {project['vessel_name']}",
             "gen_info_image": file_info["b2_url"],
             "user_id": user_id,
             "project_id": project_id,
@@ -827,7 +827,8 @@ def create_app():
             "description": description,
             "year": project['year'],
             "project_code": project['project_code'],  # Добавляем код проекта
-            "access_list": [user_id]
+            "access_list": [user_id],
+            "length": project['length']
         }
 
         project_update_data = {
