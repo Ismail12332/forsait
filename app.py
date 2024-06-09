@@ -836,6 +836,7 @@ def create_app():
             "final_note": final_note,
             "final_kartinka": final_kartinka_info["b2_url"],
             "description": description,
+            "main_image": file_info["b2_url"], 
         }
 
         # Update the project with final_note and final_kartinka
