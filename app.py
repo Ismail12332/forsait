@@ -32,6 +32,7 @@ import stripe
 import io
 import random
 import string
+import boto3
 
 load_dotenv()
 
@@ -78,6 +79,20 @@ def create_app():
 
     # Получение открытых ключей Auth0 с обработкой ошибок
     jwks_url = f'https://{AUTH0_DOMAIN}/.well-known/jwks.json'
+
+    # Vultr Object Storage Configuration
+    VULTR_ACCESS_KEY = os.getenv('VULTR_ACCESS_KEY_API')
+    VULTR_SECRET_KEY = os.getenv('VULTR_SECRET_KEY_API')
+    VULTR_ENDPOINT_URL = 'https://ewr1.vultrobjects.com'  # Replace with your region's endpoint
+
+    s3_client = boto3.client(
+        's3',
+        endpoint_url=VULTR_ENDPOINT_URL,
+        aws_access_key_id=VULTR_ACCESS_KEY,
+        aws_secret_access_key=VULTR_SECRET_KEY
+    )
+
+    BUCKET_NAME = 'verboatimg'
 
     def get_jwks():
         for attempt in range(3):  # Попробуем три раза
@@ -558,38 +573,43 @@ def create_app():
         if image_file:
             file_data = image_file.read()
             file_name = image_file.filename
-            b2_file_name = str(uuid.uuid4())
+            s3_file_name = str(uuid.uuid4())
 
-            bucket.upload_bytes(
-                data_bytes=file_data,
-                file_name=b2_file_name
-            )
+            try:
+                s3_client.put_object(
+                    Bucket=BUCKET_NAME,
+                    Key=s3_file_name,
+                    Body=file_data,
+                    ContentType=image_file.content_type,
+                    ACL='public-read'  # Make the object publicly accessible
+                )
 
-            file_info = {
-                'file_name': file_name,
-                'b2_file_name': b2_file_name,
-                'b2_url': 'https://f004.backblazeb2.com/file/Survzila/' + quote(b2_file_name)
-            }
-            app.db.files.insert_one(file_info)
+                file_info = {
+                    'file_name': file_name,
+                    's3_file_name': s3_file_name,
+                    's3_url': f'{VULTR_ENDPOINT_URL}/{BUCKET_NAME}/{quote(s3_file_name)}'
+                }
+                app.db.files.insert_one(file_info)
 
-            section = request.form.get('section')
-            subsection = request.form.get("subsection")
-            element = request.form.get("element")
-            print(section,subsection,element,file_info["b2_url"])
+                section = request.form.get('section')
+                subsection = request.form.get("subsection")
+                element = request.form.get("element")
 
-            app.db.projects.update_one(
-                {"_id": project_id, f"sections.{section}.{subsection}.{element}": {"$exists": True}},
-                {"$push": {f"sections.{section}.{subsection}.{element}.images": file_info["b2_url"]}}
-            )
+                app.db.projects.update_one(
+                    {"_id": project_id, f"sections.{section}.{subsection}.{element}": {"$exists": True}},
+                    {"$push": {f"sections.{section}.{subsection}.{element}.images": file_info["s3_url"]}}
+                )
 
-            updated_project = app.db.projects.find_one({"_id": project_id})
-            updated_project["_id"] = str(updated_project["_id"])
+                updated_project = app.db.projects.find_one({"_id": project_id})
+                updated_project["_id"] = str(updated_project["_id"])
 
-            return jsonify({
-                "status": "success",
-                "message": "Image uploaded successfully",
-                "updated_project": updated_project
-            }), 200
+                return jsonify({
+                    "status": "success",
+                    "message": "Image uploaded successfully",
+                    "updated_project": updated_project
+                }), 200
+            except Exception as e:
+                return jsonify({"status": "error", "message": "Failed to upload file"}), 500
         else:
             return jsonify({"status": "error", "message": "Failed to upload file"}), 400
         
@@ -804,63 +824,80 @@ def create_app():
         if not project:
             return jsonify({"message": "Project not found"}), 404
 
-        # Upload the files to Backblaze B2
-        b2_file_name = str(uuid.uuid4())
-        b2_file = bucket.upload_bytes(file.read(), b2_file_name)
-        file_info = {
-            'b2_url': f'https://f004.backblazeb2.com/file/{bucket_name_b2}/{quote(b2_file_name)}'
-        }
+        # Upload the files to Vultr Object Storage
+        s3_file_name = str(uuid.uuid4())
+        final_kartinka_name = str(uuid.uuid4())
 
-        b2_final_kartinka_name = str(uuid.uuid4())
-        b2_final_kartinka = bucket.upload_bytes(final_kartinka.read(), b2_final_kartinka_name)
-        final_kartinka_info = {
-            'b2_url': f'https://f004.backblazeb2.com/file/{bucket_name_b2}/{quote(b2_final_kartinka_name)}'
-        }
-
-        vitrine_data = {
-            "vessel_name": f"{project['boat_make']} {project['boat_model']} {project['boat_registration']}",
-            "gen_info_image": file_info["b2_url"],
-            "user_id": user_id,
-            "project_id": project_id,
-            "price": price,
-            "city": project['city'],
-            "description": description,
-            "year": project['year'],
-            "project_code": project['project_code'],  # Добавляем код проекта
-            "access_list": [user_id],
-            "final_kartinka": final_kartinka_info["b2_url"],
-            "length": project['length']
-        }
-
-        project_update_data = {
-            "final_note": final_note,
-            "final_kartinka": final_kartinka_info["b2_url"],
-            "description": description,
-            "main_image": file_info["b2_url"], 
-        }
-
-        # Update the project with final_note and final_kartinka
-        app.db.projects.update_one(
-            {"_id": project_id},
-            {"$set": project_update_data}
-        )
-
-        existing_entry = app.db.vitrine.find_one({"project_id": project_id})
-        if existing_entry:
-            result = app.db.vitrine.update_one(
-                {"project_id": project_id},
-                {"$set": vitrine_data}
+        try:
+            s3_client.put_object(
+                Bucket=BUCKET_NAME,
+                Key=s3_file_name,
+                Body=file.read(),
+                ContentType=file.content_type,
+                ACL='public-read'  # Make the object publicly accessible
             )
-            if result.modified_count > 0:
-                return jsonify({"status": "success", "message": "Project updated in showcase"}), 200
+            s3_client.put_object(
+                Bucket=BUCKET_NAME,
+                Key=final_kartinka_name,
+                Body=final_kartinka.read(),
+                ContentType=final_kartinka.content_type,
+                ACL='public-read'  # Make the object publicly accessible
+            )
+
+            file_info = {
+                's3_url': f'{VULTR_ENDPOINT_URL}/{BUCKET_NAME}/{quote(s3_file_name)}'
+            }
+
+            final_kartinka_info = {
+                's3_url': f'{VULTR_ENDPOINT_URL}/{BUCKET_NAME}/{quote(final_kartinka_name)}'
+            }
+
+            vitrine_data = {
+                "vessel_name": f"{project['boat_make']} {project['boat_model']} {project['boat_registration']}",
+                "gen_info_image": file_info["s3_url"],
+                "user_id": user_id,
+                "project_id": project_id,
+                "price": price,
+                "city": project['city'],
+                "description": description,
+                "year": project['year'],
+                "project_code": project['project_code'],  # Добавляем код проекта
+                "access_list": [user_id],
+                "final_kartinka": final_kartinka_info["s3_url"],
+                "length": project['length']
+            }
+
+            project_update_data = {
+                "final_note": final_note,
+                "final_kartinka": final_kartinka_info["s3_url"],
+                "description": description,
+                "main_image": file_info["s3_url"],
+            }
+
+            # Update the project with final_note and final_kartinka
+            app.db.projects.update_one(
+                {"_id": project_id},
+                {"$set": project_update_data}
+            )
+
+            existing_entry = app.db.vitrine.find_one({"project_id": project_id})
+            if existing_entry:
+                result = app.db.vitrine.update_one(
+                    {"project_id": project_id},
+                    {"$set": vitrine_data}
+                )
+                if result.modified_count > 0:
+                    return jsonify({"status": "success", "message": "Project updated in showcase"}), 200
+                else:
+                    return jsonify({"message": "Failed to update project in showcase"}), 400
             else:
-                return jsonify({"message": "Failed to update project in showcase"}), 400
-        else:
-            result = app.db.vitrine.insert_one(vitrine_data)
-            if result.inserted_id:
-                return jsonify({"status": "success", "message": "Project added to showcase"}), 200
-            else:
-                return jsonify({"message": "Failed to add project to showcase"}), 400
+                result = app.db.vitrine.insert_one(vitrine_data)
+                if result.inserted_id:
+                    return jsonify({"status": "success", "message": "Project added to showcase"}), 200
+                else:
+                    return jsonify({"message": "Failed to add project to showcase"}), 400
+        except Exception as e:
+            return jsonify({"status": "error", "message": f"Failed to upload file: {str(e)}"}), 500
             
 
 
