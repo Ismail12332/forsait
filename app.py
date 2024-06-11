@@ -33,6 +33,7 @@ import io
 import random
 import string
 import boto3
+import qrcode
 
 load_dotenv()
 
@@ -828,6 +829,45 @@ def create_app():
         s3_file_name = str(uuid.uuid4())
         final_kartinka_name = str(uuid.uuid4())
 
+    # Generate QR Code with logo in the center
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            box_size=10,
+            border=4,
+        )
+        project_url = f"https://verboat.com/yachtpreview/{project['project_code']}"
+        qr.add_data(project_url)
+        qr.make(fit=True)
+
+        img = qr.make_image(fill='black', back_color='white').convert('RGB')
+
+        # Load the logo and resize it
+        logo = Image.open('static/images/VerboatLogo02.png')  # Update the path to your logo image
+        logo_size = (img.size[0] // 4, img.size[1] // 4)
+        logo = logo.resize(logo_size, Image.LANCZOS)
+
+        # Calculate the position and paste the logo on the QR code
+        logo_pos = ((img.size[0] - logo_size[0]) // 2, (img.size[1] - logo_size[1]) // 2)
+        img.paste(logo, logo_pos, logo)
+
+        buffered = BytesIO()
+        img.save(buffered, format="PNG")
+        qr_code_data = buffered.getvalue()
+
+        # Upload QR Code to Vultr Object Storage
+        qr_code_file_name = f"{project['project_code']}_qr.png"
+        s3_client.put_object(
+            Bucket=BUCKET_NAME,
+            Key=qr_code_file_name,
+            Body=qr_code_data,
+            ContentType='image/png',
+            ACL='public-read'  # Make the object publicly accessible
+        )
+        qr_code_info = {
+            's3_url': f'{VULTR_ENDPOINT_URL}/{BUCKET_NAME}/{quote(qr_code_file_name)}'
+        }    
+
         try:
             s3_client.put_object(
                 Bucket=BUCKET_NAME,
@@ -1063,6 +1103,51 @@ def create_app():
             print("Error:", e)
             return jsonify({"status": "error", "message": "An error occurred"}), 500
         
+
+
+    #GPT
+    @app.route('/edit_project/<project_id>/get-price-estimate', methods=['POST'])
+    @requires_auth
+    def get_price_estimate(project_id):
+        user_id = request.user.get('sub')
+
+        # Проверка подлинности клиента
+        if not check_project_owner(user_id, project_id):
+            return jsonify({"status": "error", "message": "Unauthorized access"}), 403
+
+        project = app.db.projects.find_one({"_id": ObjectId(project_id), "user_id": user_id})
+        if not project:
+            return jsonify({"status": "error", "message": "Project not found"}), 404
+
+        project_description = f"Boat make: {project['boat_make']}, Boat model: {project['boat_model']}, Year: {project['year']}, Length: {project['length']}, Engine: {project['engine']}, Price: the seller wants for the yacht {project['price']}, Description: {project['description']}"
+
+        sections_description = ""
+        for section_name, section_content in project['sections'].items():
+            for subsection_name, subsection_content in section_content.items():
+                for element_name, element_content in subsection_content.items():
+                    if element_content['steps']:
+                        element_desc = f"Element {element_name} with steps: {element_content['steps']}"
+                        sections_description += f"\nSection {section_name}, Subsection {subsection_name}: {element_desc}"
+
+        print(sections_description)
+
+        prompt = f"Given the following details about a yacht: {project_description}, and the detailed inspection:\n{sections_description}, can you estimate its market value considering all described conditions and deficiencies?"
+
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "You are an assistant who estimates the value of yachts based on the provided data and descriptions. You need to estimate the approximate value of this yacht. You need to give a neutral answer you need to find similar yachts and their average price the buyer indicates the price he wants for selling this yacht."},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            price_estimate = response.choices[0].message.content.strip()
+            print(f'ответ {price_estimate}')
+            return jsonify({'price_estimate': price_estimate})
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            traceback.print_exc()
+            return jsonify({'error': str(e)}), 500
 
     if __name__ == "__main__":
         app.run(debug=True)
