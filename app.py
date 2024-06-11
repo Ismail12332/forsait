@@ -844,7 +844,7 @@ def create_app():
         img = qr.make_image(fill='black', back_color='white').convert('RGB')
 
         # Load the logo and resize it
-        logo = Image.open('static/images/VerboatLogo02.png')  # Update the path to your logo image
+        logo = Image.open('static/VerboatLogo02.png')  # Update the path to your logo image
         logo_size = (img.size[0] // 4, img.size[1] // 4)
         logo = logo.resize(logo_size, Image.LANCZOS)
 
@@ -905,7 +905,8 @@ def create_app():
                 "project_code": project['project_code'],  # Добавляем код проекта
                 "access_list": [user_id],
                 "final_kartinka": final_kartinka_info["s3_url"],
-                "length": project['length']
+                "length": project['length'],
+                "qr_code": qr_code_info["s3_url"],
             }
 
             project_update_data = {
