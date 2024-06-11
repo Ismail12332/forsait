@@ -346,7 +346,7 @@ def create_app():
         return jsonify({"status": "success", "user_id": str(user_id), "projects": projects_list})
     
 
-    @app.route("/glav", methods=["GET"])
+    @app.route("/main", methods=["GET"])
     def get_projectse(supports_credentials=True):
             return render_template("index.html")
     
