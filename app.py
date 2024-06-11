@@ -34,6 +34,7 @@ import random
 import string
 import boto3
 import qrcode
+from PIL import Image
 
 load_dotenv()
 
