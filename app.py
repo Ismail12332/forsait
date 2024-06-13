@@ -830,45 +830,6 @@ def create_app():
         s3_file_name = str(uuid.uuid4())
         final_kartinka_name = str(uuid.uuid4())
 
-    # Generate QR Code with logo in the center
-        qr = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_H,
-            box_size=10,
-            border=4,
-        )
-        project_url = f"https://verboat.com/yachtpreview/{project['project_code']}"
-        qr.add_data(project_url)
-        qr.make(fit=True)
-
-        img = qr.make_image(fill='black', back_color='white').convert('RGB')
-
-        # Load the logo and resize it
-        logo = Image.open('static/VerboatLogo02.png')  # Update the path to your logo image
-        logo_size = (img.size[0] // 4, img.size[1] // 4)
-        logo = logo.resize(logo_size, Image.LANCZOS)
-
-        # Calculate the position and paste the logo on the QR code
-        logo_pos = ((img.size[0] - logo_size[0]) // 2, (img.size[1] - logo_size[1]) // 2)
-        img.paste(logo, logo_pos, logo)
-
-        buffered = BytesIO()
-        img.save(buffered, format="PNG")
-        qr_code_data = buffered.getvalue()
-
-        # Upload QR Code to Vultr Object Storage
-        qr_code_file_name = f"{project['project_code']}_qr.png"
-        s3_client.put_object(
-            Bucket=BUCKET_NAME,
-            Key=qr_code_file_name,
-            Body=qr_code_data,
-            ContentType='image/png',
-            ACL='public-read'  # Make the object publicly accessible
-        )
-        qr_code_info = {
-            's3_url': f'{VULTR_ENDPOINT_URL}/{BUCKET_NAME}/{quote(qr_code_file_name)}'
-        }    
-
         try:
             s3_client.put_object(
                 Bucket=BUCKET_NAME,
@@ -893,6 +854,73 @@ def create_app():
                 's3_url': f'{VULTR_ENDPOINT_URL}/{BUCKET_NAME}/{quote(final_kartinka_name)}'
             }
 
+            # Generate QR Code with logo in the center
+            qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_H,
+                box_size=10,
+                border=4,
+            )
+            project_url = f"https://verboat.com/yachtpreview/{project['project_code']}"
+            qr.add_data(project_url)
+            qr.make(fit=True)
+
+            img = qr.make_image(fill='black', back_color='white').convert('RGB')
+
+            # Load the logo and resize it
+            logo = Image.open('static/images/VerboatLogo02.png')  # Update the path to your logo image
+            logo_size = (img.size[0] // 4, img.size[1] // 4)
+            logo = logo.resize(logo_size, Image.LANCZOS)
+
+            # Calculate the position and paste the logo on the QR code
+            logo_pos = ((img.size[0] - logo_size[0]) // 2, (img.size[1] - logo_size[1]) // 2)
+            img.paste(logo, logo_pos, logo)
+
+            buffered = BytesIO()
+            img.save(buffered, format="PNG")
+            qr_code_data = buffered.getvalue()
+
+            # Upload QR Code to Vultr Object Storage
+            qr_code_file_name = f"{project['project_code']}_qr.png"
+            s3_client.put_object(
+                Bucket=BUCKET_NAME,
+                Key=qr_code_file_name,
+                Body=qr_code_data,
+                ContentType='image/png',
+                ACL='public-read'  # Make the object publicly accessible
+            )
+            qr_code_info = {
+                's3_url': f'{VULTR_ENDPOINT_URL}/{BUCKET_NAME}/{quote(qr_code_file_name)}'
+            }
+
+            # Check if the product already exists in Stripe
+            existing_product = None
+            try:
+                search_result = stripe.Product.search(
+                    query=f"name:'{project['project_code']}'"
+                )
+                if search_result['data']:
+                    existing_product = search_result['data'][0]
+            except Exception as e:
+                return jsonify({"status": "error", "message": f"Failed to search Stripe products: {str(e)}"}), 500
+
+            if not existing_product:
+                # Create Stripe product if it doesn't exist
+                stripe_product = stripe.Product.create(
+                    name=f"{project['project_code']}",
+                    description=description,
+                    images=[file_info['s3_url']],
+                )
+
+                stripe_price = stripe.Price.create(
+                    product=stripe_product.id,
+                    unit_amount=1000,
+                    currency='usd',
+                )
+            else:
+                stripe_product = existing_product
+                stripe_price = stripe.Price.list(product=stripe_product.id, limit=1).data[0]
+
             vitrine_data = {
                 "vessel_name": f"{project['boat_make']} {project['boat_model']} {project['boat_registration']}",
                 "gen_info_image": file_info["s3_url"],
@@ -907,6 +935,8 @@ def create_app():
                 "final_kartinka": final_kartinka_info["s3_url"],
                 "length": project['length'],
                 "qr_code": qr_code_info["s3_url"],
+                "stripe_product_id": stripe_product.id,
+                "stripe_price_id": stripe_price.id,  # Добавляем URL QR-кода
             }
 
             project_update_data = {
@@ -914,9 +944,12 @@ def create_app():
                 "final_kartinka": final_kartinka_info["s3_url"],
                 "description": description,
                 "main_image": file_info["s3_url"],
+                "qr_code": qr_code_info["s3_url"],
+                #"stripe_product_id": stripe_product.id,
+                #"stripe_price_id": stripe_price.id,
             }
 
-            # Update the project with final_note and final_kartinka
+            # Update the project with final_note, final_kartinka, description, and main_image
             app.db.projects.update_one(
                 {"_id": project_id},
                 {"$set": project_update_data}
@@ -1013,13 +1046,7 @@ def create_app():
         session = stripe.checkout.Session.create(
             payment_method_types=['card'],
             line_items=[{
-                'price_data': {
-                    'currency': 'usd',
-                    'product_data': {
-                        'name': project['vessel_name'],
-                    },
-                    'unit_amount': 1000,
-                },
+                'price': project['stripe_price_id'],
                 'quantity': 1,
             }],
             mode='payment',
@@ -1121,7 +1148,8 @@ def create_app():
         if not project:
             return jsonify({"status": "error", "message": "Project not found"}), 404
 
-        project_description = f"Boat make: {project['boat_make']}, Boat model: {project['boat_model']}, Year: {project['year']}, Length: {project['length']}, Engine: {project['engine']}, Price: the seller wants for the yacht {project['price']}, Description: {project['description']}"
+        project_description = f"Hi! I would like to get an appraisal of the condition of a 2006 Regal 2665 Commodore boat that is selling for $20,000. Here is the inspection data:"
+        project_description = f"information about the vessel: {project['boat_make']}, Boat model: {project['boat_model']}, Year: {project['year']}, Length: {project['length']}, Engine: {project['engine']}, Price: the seller wants for the yacht {project['price']}"
 
         sections_description = ""
         for section_name, section_content in project['sections'].items():
@@ -1133,7 +1161,7 @@ def create_app():
 
         print(sections_description)
 
-        prompt = f"Given the following details about a yacht: {project_description}, and the detailed inspection:\n{sections_description}, can you estimate its market value considering all described conditions and deficiencies?"
+        prompt = f"Hi! I would like to get an estimate of the condition of the boat: {project_description}, Here is the information from the inspection::\n{sections_description}, Based on the information provided, make an optimistic assessment of the boat's condition, describing the problems as easily solvable, and provide an approximate cost of components to fix them."
 
         try:
             response = client.chat.completions.create(
@@ -1150,6 +1178,68 @@ def create_app():
             print(f"An error occurred: {e}")
             traceback.print_exc()
             return jsonify({'error': str(e)}), 500
+        
+
+
+
+    @app.route('/api/deleteFinalNote/<project_id>', methods=['POST'])
+    @requires_auth
+    def delete_final_note(project_id):
+        user_id = request.user.get('sub')
+
+        try:
+            project_id = ObjectId(project_id)
+        except Exception as e:
+            return jsonify({"status": "error", "message": "Invalid project_id"}), 400
+
+        project = app.db.projects.find_one({"_id": project_id, "user_id": user_id})
+        if not project:
+            return jsonify({"status": "error", "message": "Project not found"}), 404
+
+        app.db.projects.update_one(
+            {"_id": project_id},
+            {"$unset": {"final_note": ""}}
+        )
+
+        updated_project = app.db.projects.find_one({"_id": project_id})
+        updated_project["_id"] = str(updated_project["_id"])
+
+        return jsonify({"status": "success", "message": "Final note deleted successfully", "updated_project": updated_project}), 200
+
+
+    @app.route('/edit_project/<project_id>/add-final-note', methods=['POST'])
+    @requires_auth
+    def add_final_note(project_id):
+        user_id = request.user.get('sub')
+
+        try:
+            project_id = ObjectId(project_id)
+        except Exception as e:
+            return jsonify({"status": "error", "message": "Invalid project_id"}), 400
+
+        if not check_project_owner(user_id, project_id):
+            return jsonify({"status": "error", "message": "Unauthorized access"}), 403
+
+        data = request.get_json()
+        final_note = data.get('final_note')
+
+        if not final_note:
+            return jsonify({"message": "Final note is required"}), 400
+
+        result = app.db.projects.update_one(
+            {"_id": ObjectId(project_id), "user_id": user_id},
+            {"$set": {"final_note": final_note}}
+        )
+
+        updated_project = app.db.projects.find_one({"_id": project_id})
+        updated_project["_id"] = str(updated_project["_id"])
+
+        print(updated_project)
+
+        if result.modified_count == 1:
+            return jsonify({"status": "success", "updated_project": updated_project}), 200
+        else:
+            return jsonify({"message": "Failed to add final note"}), 400
 
     if __name__ == "__main__":
         app.run(debug=True)
