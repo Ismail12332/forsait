@@ -1171,7 +1171,7 @@ def create_app():
 
         print(sections_description)
 
-        prompt = f"Hi! I would like to get an estimate of the condition of the boat: {project_description}, Here is the information from the inspection::\n{sections_description}, Based on the information provided, make an neutral assessment of the boat's condition, describing the problems as easily solvable, and provide an approximate cost of components to fix them I need you to give me an answer in the form of an HTML code that I can insert into the existing diff text, it should be in English, remove the header about the tone of the resume.There is no need to indicate in your answer that this is an optimistic assessment dont need write ```html"
+        prompt = f"Hi! I would like to get an estimate of the condition of the boat: {project_description}, Here is the information from the inspection::\n{sections_description}, Based on the information provided, make an neutral assessment of the boat's condition, describing the problems as easily solvable, and provide an approximate cost of components to fix them I need you to give me an answer in the form of an HTML code that I can insert into the existing diff text, it should be in English, remove the header about the tone of the resume.give a conversational answer with an approximate price range for components.There is no need to indicate in your answer that this is an optimistic assessment dont need write ```html"
 
         try:
             response = client.chat.completions.create(
