@@ -35,6 +35,7 @@ import string
 import boto3
 import qrcode
 from PIL import Image
+import logging
 
 load_dotenv()
 
@@ -806,173 +807,181 @@ def create_app():
     @app.route("/api/add_to_showcase", methods=["POST"])
     @requires_auth
     def add_to_showcase():
-        user_id = request.user.get('sub')  # Extract user_id from token
-        data = request.form.to_dict()
-        project_id = ObjectId(data.get('project_id'))
-        price = data.get('price')
-        description = data.get('description')
-        final_note = data.get('final_note')
-        file = request.files.get('file')
-        final_kartinka = request.files.get('final_kartinka')
-        print(final_note, final_kartinka, file)
-
-        if not check_project_owner(user_id, project_id):
-            return jsonify({"status": "error", "message": "Unauthorized access"}), 403
-
-        if not project_id or not price or not description or not file or not final_note or not final_kartinka:
-            return jsonify({"message": "Missing project_id, price, description, file, final_note, or final_kartinka"}), 400
-
-        project = app.db.projects.find_one({"_id": project_id, "user_id": user_id})
-        if not project:
-            return jsonify({"message": "Project not found"}), 404
-
-        # Upload the files to Vultr Object Storage
-        s3_file_name = str(uuid.uuid4())
-        final_kartinka_name = str(uuid.uuid4())
-
         try:
-            s3_client.put_object(
-                Bucket=BUCKET_NAME,
-                Key=s3_file_name,
-                Body=file.read(),
-                ContentType=file.content_type,
-                ACL='public-read'  # Make the object publicly accessible
-            )
-            s3_client.put_object(
-                Bucket=BUCKET_NAME,
-                Key=final_kartinka_name,
-                Body=final_kartinka.read(),
-                ContentType=final_kartinka.content_type,
-                ACL='public-read'  # Make the object publicly accessible
-            )
+            user_id = request.user.get('sub')  # Extract user_id from token
+            data = request.form.to_dict()
+            project_id = ObjectId(data.get('project_id'))
+            price = data.get('price')
+            description = data.get('description')
+            final_note = data.get('final_note')
+            file = request.files.get('file')
+            final_kartinka = request.files.get('final_kartinka')
 
-            file_info = {
-                's3_url': f'{VULTR_ENDPOINT_URL}/{BUCKET_NAME}/{quote(s3_file_name)}'
-            }
+            logging.debug(f"Received data: {data}")
+            logging.debug(f"Received files: file={file}, final_kartinka={final_kartinka}")
 
-            final_kartinka_info = {
-                's3_url': f'{VULTR_ENDPOINT_URL}/{BUCKET_NAME}/{quote(final_kartinka_name)}'
-            }
+            if not check_project_owner(user_id, project_id):
+                return jsonify({"status": "error", "message": "Unauthorized access"}), 403
 
-            # Generate QR Code with logo in the center
-            qr = qrcode.QRCode(
-                version=1,
-                error_correction=qrcode.constants.ERROR_CORRECT_H,
-                box_size=10,
-                border=4,
-            )
-            project_url = f"https://verboat.com/yachtpreview/{project['project_code']}"
-            qr.add_data(project_url)
-            qr.make(fit=True)
+            if not project_id or not price or not description or not file or not final_note or not final_kartinka:
+                return jsonify({"message": "Missing project_id, price, description, file, final_note, or final_kartinka"}), 400
 
-            img = qr.make_image(fill='black', back_color='white').convert('RGB')
+            project = app.db.projects.find_one({"_id": project_id, "user_id": user_id})
+            if not project:
+                return jsonify({"message": "Project not found"}), 404
 
-            # Load the logo and resize it
-            logo = Image.open('static/images/VerboatLogo02.png')  # Update the path to your logo image
-            logo_size = (img.size[0] // 4, img.size[1] // 4)
-            logo = logo.resize(logo_size, Image.LANCZOS)
+            # Upload the files to Vultr Object Storage
+            s3_file_name = str(uuid.uuid4())
+            final_kartinka_name = str(uuid.uuid4())
 
-            # Calculate the position and paste the logo on the QR code
-            logo_pos = ((img.size[0] - logo_size[0]) // 2, (img.size[1] - logo_size[1]) // 2)
-            img.paste(logo, logo_pos, logo)
-
-            buffered = BytesIO()
-            img.save(buffered, format="PNG")
-            qr_code_data = buffered.getvalue()
-
-            # Upload QR Code to Vultr Object Storage
-            qr_code_file_name = f"{project['project_code']}_qr.png"
-            s3_client.put_object(
-                Bucket=BUCKET_NAME,
-                Key=qr_code_file_name,
-                Body=qr_code_data,
-                ContentType='image/png',
-                ACL='public-read'  # Make the object publicly accessible
-            )
-            qr_code_info = {
-                's3_url': f'{VULTR_ENDPOINT_URL}/{BUCKET_NAME}/{quote(qr_code_file_name)}'
-            }
-
-            # Check if the product already exists in Stripe
-            existing_product = None
             try:
-                search_result = stripe.Product.search(
-                    query=f"name:'{project['project_code']}'"
+                s3_client.put_object(
+                    Bucket=BUCKET_NAME,
+                    Key=s3_file_name,
+                    Body=file.read(),
+                    ContentType=file.content_type,
+                    ACL='public-read'  # Make the object publicly accessible
                 )
-                if search_result['data']:
-                    existing_product = search_result['data'][0]
+                s3_client.put_object(
+                    Bucket=BUCKET_NAME,
+                    Key=final_kartinka_name,
+                    Body=final_kartinka.read(),
+                    ContentType=final_kartinka.content_type,
+                    ACL='public-read'  # Make the object publicly accessible
+                )
+
+                file_info = {
+                    's3_url': f'{VULTR_ENDPOINT_URL}/{BUCKET_NAME}/{quote(s3_file_name)}'
+                }
+
+                final_kartinka_info = {
+                    's3_url': f'{VULTR_ENDPOINT_URL}/{BUCKET_NAME}/{quote(final_kartinka_name)}'
+                }
+
+                # Generate QR Code with logo in the center
+                qr = qrcode.QRCode(
+                    version=1,
+                    error_correction=qrcode.constants.ERROR_CORRECT_H,
+                    box_size=10,
+                    border=4,
+                )
+                project_url = f"https://verboat.com/yachtpreview/{project['project_code']}"
+                qr.add_data(project_url)
+                qr.make(fit=True)
+
+                img = qr.make_image(fill='black', back_color='white').convert('RGB')
+
+                # Load the logo and resize it
+                logo = Image.open('static/images/VerboatLogo02.png')  # Update the path to your logo image
+                logo_size = (img.size[0] // 4, img.size[1] // 4)
+                logo = logo.resize(logo_size, Image.LANCZOS)
+
+                # Calculate the position and paste the logo on the QR code
+                logo_pos = ((img.size[0] - logo_size[0]) // 2, (img.size[1] - logo_size[1]) // 2)
+                img.paste(logo, logo_pos, logo)
+
+                buffered = BytesIO()
+                img.save(buffered, format="PNG")
+                qr_code_data = buffered.getvalue()
+
+                # Upload QR Code to Vultr Object Storage
+                qr_code_file_name = f"{project['project_code']}_qr.png"
+                s3_client.put_object(
+                    Bucket=BUCKET_NAME,
+                    Key=qr_code_file_name,
+                    Body=qr_code_data,
+                    ContentType='image/png',
+                    ACL='public-read'  # Make the object publicly accessible
+                )
+                qr_code_info = {
+                    's3_url': f'{VULTR_ENDPOINT_URL}/{BUCKET_NAME}/{quote(qr_code_file_name)}'
+                }
+
+                # Check if the product already exists in Stripe
+                existing_product = None
+                try:
+                    search_result = stripe.Product.search(
+                        query=f"name:'{project['project_code']}'"
+                    )
+                    if search_result['data']:
+                        existing_product = search_result['data'][0]
+                except Exception as e:
+                    logging.error(f"Failed to search Stripe products: {str(e)}")
+                    return jsonify({"status": "error", "message": f"Failed to search Stripe products: {str(e)}"}), 500
+
+                if not existing_product:
+                    # Create Stripe product if it doesn't exist
+                    stripe_product = stripe.Product.create(
+                        name=f"{project['project_code']}",
+                        description=description,
+                        images=[file_info['s3_url']],
+                    )
+
+                    stripe_price = stripe.Price.create(
+                        product=stripe_product.id,
+                        unit_amount=1000,
+                        currency='usd',
+                    )
+                else:
+                    stripe_product = existing_product
+                    stripe_price = stripe.Price.list(product=stripe_product.id, limit=1).data[0]
+
+                vitrine_data = {
+                    "vessel_name": f"{project['boat_make']} {project['boat_model']} {project['boat_registration']}",
+                    "gen_info_image": file_info["s3_url"],
+                    "user_id": user_id,
+                    "project_id": project_id,
+                    "price": price,
+                    "city": project['city'],
+                    "description": description,
+                    "year": project['year'],
+                    "project_code": project['project_code'],  # Добавляем код проекта
+                    "access_list": [user_id],
+                    "final_kartinka": final_kartinka_info["s3_url"],
+                    "length": project['length'],
+                    "qr_code": qr_code_info["s3_url"],
+                    "stripe_product_id": stripe_product.id,
+                    "stripe_price_id": stripe_price.id,  # Добавляем URL QR-кода
+                }
+
+                project_update_data = {
+                    "final_note": final_note,
+                    "final_kartinka": final_kartinka_info["s3_url"],
+                    "description": description,
+                    "main_image": file_info["s3_url"],
+                    "qr_code": qr_code_info["s3_url"],
+                    "stripe_product_id": stripe_product.id,
+                    "stripe_price_id": stripe_price.id,
+                }
+
+                # Update the project with final_note, final_kartinka, description, and main_image
+                app.db.projects.update_one(
+                    {"_id": project_id},
+                    {"$set": project_update_data}
+                )
+
+                existing_entry = app.db.vitrine.find_one({"project_id": project_id})
+                if existing_entry:
+                    result = app.db.vitrine.update_one(
+                        {"project_id": project_id},
+                        {"$set": vitrine_data}
+                    )
+                    if result.modified_count > 0:
+                        return jsonify({"status": "success", "message": "Project updated in showcase"}), 200
+                    else:
+                        return jsonify({"message": "Failed to update project in showcase"}), 400
+                else:
+                    result = app.db.vitrine.insert_one(vitrine_data)
+                    if result.inserted_id:
+                        return jsonify({"status": "success", "message": "Project added to showcase"}), 200
+                    else:
+                        return jsonify({"message": "Failed to add project to showcase"}), 400
             except Exception as e:
-                return jsonify({"status": "error", "message": f"Failed to search Stripe products: {str(e)}"}), 500
-
-            if not existing_product:
-                # Create Stripe product if it doesn't exist
-                stripe_product = stripe.Product.create(
-                    name=f"{project['project_code']}",
-                    description=description,
-                    images=[file_info['s3_url']],
-                )
-
-                stripe_price = stripe.Price.create(
-                    product=stripe_product.id,
-                    unit_amount=1000,
-                    currency='usd',
-                )
-            else:
-                stripe_product = existing_product
-                stripe_price = stripe.Price.list(product=stripe_product.id, limit=1).data[0]
-
-            vitrine_data = {
-                "vessel_name": f"{project['boat_make']} {project['boat_model']} {project['boat_registration']}",
-                "gen_info_image": file_info["s3_url"],
-                "user_id": user_id,
-                "project_id": project_id,
-                "price": price,
-                "city": project['city'],
-                "description": description,
-                "year": project['year'],
-                "project_code": project['project_code'],  # Добавляем код проекта
-                "access_list": [user_id],
-                "final_kartinka": final_kartinka_info["s3_url"],
-                "length": project['length'],
-                "qr_code": qr_code_info["s3_url"],
-                "stripe_product_id": stripe_product.id,
-                "stripe_price_id": stripe_price.id,  # Добавляем URL QR-кода
-            }
-
-            project_update_data = {
-                "final_note": final_note,
-                "final_kartinka": final_kartinka_info["s3_url"],
-                "description": description,
-                "main_image": file_info["s3_url"],
-                "qr_code": qr_code_info["s3_url"],
-                "stripe_product_id": stripe_product.id,
-                "stripe_price_id": stripe_price.id,
-            }
-
-            # Update the project with final_note, final_kartinka, description, and main_image
-            app.db.projects.update_one(
-                {"_id": project_id},
-                {"$set": project_update_data}
-            )
-
-            existing_entry = app.db.vitrine.find_one({"project_id": project_id})
-            if existing_entry:
-                result = app.db.vitrine.update_one(
-                    {"project_id": project_id},
-                    {"$set": vitrine_data}
-                )
-                if result.modified_count > 0:
-                    return jsonify({"status": "success", "message": "Project updated in showcase"}), 200
-                else:
-                    return jsonify({"message": "Failed to update project in showcase"}), 400
-            else:
-                result = app.db.vitrine.insert_one(vitrine_data)
-                if result.inserted_id:
-                    return jsonify({"status": "success", "message": "Project added to showcase"}), 200
-                else:
-                    return jsonify({"message": "Failed to add project to showcase"}), 400
+                logging.error(f"Failed to upload file: {str(e)}")
+                return jsonify({"status": "error", "message": f"Failed to upload file: {str(e)}"}), 500
         except Exception as e:
-            return jsonify({"status": "error", "message": f"Failed to upload file: {str(e)}"}), 500
+            logging.error(f"Failed to process request: {str(e)}")
+            return jsonify({"status": "error", "message": f"Failed to process request: {str(e)}"}), 500
             
 
 
