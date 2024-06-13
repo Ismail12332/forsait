@@ -55,6 +55,7 @@ def create_app():
     app.db = client.my_database
     users_collection = app.db.users
     projects_collection = app.db.projects
+    app.db.vitrine.create_index("access_list")
     client = OpenAI(
         api_key=os.getenv("OPENAI_API_KEY")
     )
@@ -1249,6 +1250,28 @@ def create_app():
             return jsonify({"status": "success", "updated_project": updated_project}), 200
         else:
             return jsonify({"message": "Failed to add final note"}), 400
+        
+
+
+    @app.route("/api/bought_projects", methods=["GET"])
+    @requires_auth
+    def bought_projects():
+        user_id = request.user.get('sub')
+
+        # Ищем все проекты, где пользователь является владельцем или имеет доступ
+        bought_projects = list(app.db.vitrine.find({"access_list": user_id}))
+
+        for project in bought_projects:
+            project["_id"] = str(project["_id"])
+            project["project_id"] = str(project["project_id"])
+
+        return jsonify({"projects": bought_projects}), 200
+    
+
+    @app.route("/bought-projects", methods=["GET"])
+    @requires_auth
+    def get_bought_projects():
+        return render_template("index.html")
 
     if __name__ == "__main__":
         app.run(debug=True)
