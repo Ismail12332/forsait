@@ -945,8 +945,8 @@ def create_app():
                 "description": description,
                 "main_image": file_info["s3_url"],
                 "qr_code": qr_code_info["s3_url"],
-                #"stripe_product_id": stripe_product.id,
-                #"stripe_price_id": stripe_price.id,
+                "stripe_product_id": stripe_product.id,
+                "stripe_price_id": stripe_price.id,
             }
 
             # Update the project with final_note, final_kartinka, description, and main_image
