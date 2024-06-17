@@ -877,7 +877,7 @@ def create_app():
                 img = qr.make_image(fill='black', back_color='white').convert('RGB')
 
                 # Load the logo and resize it
-                logo = Image.open('static/images/VerboatLogo02.png')  # Update the path to your logo image
+                logo = Image.open('static/VerboatLogo02.png')
                 logo_size = (img.size[0] // 4, img.size[1] // 4)
                 logo = logo.resize(logo_size, Image.LANCZOS)
 
