@@ -34,7 +34,7 @@ import random
 import string
 import boto3
 import qrcode
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import logging
 
 load_dotenv()
@@ -859,12 +859,16 @@ def create_app():
                     's3_url': f'{VULTR_ENDPOINT_URL}/{BUCKET_NAME}/{quote(final_kartinka_name)}'
                 }
 
+                # Load the custom font
+                font_path = "static/built titling bd.otf"  # Update the path to the uploaded font file
+                font_size = 70  # Set the desired font size
+
                 # Generate QR Code with logo in the center
                 qr = qrcode.QRCode(
                     version=1,
                     error_correction=qrcode.constants.ERROR_CORRECT_H,
                     box_size=10,
-                    border=4,
+                    border=8,
                 )
                 project_url = f"https://verboat.com/yachtpreview/{project['project_code']}"
                 qr.add_data(project_url)
@@ -873,7 +877,7 @@ def create_app():
                 img = qr.make_image(fill='black', back_color='white').convert('RGB')
 
                 # Load the logo and resize it
-                logo = Image.open('static/VerboatLogo02.png')  # Update the path to your logo image
+                logo = Image.open('static/images/VerboatLogo02.png')  # Update the path to your logo image
                 logo_size = (img.size[0] // 4, img.size[1] // 4)
                 logo = logo.resize(logo_size, Image.LANCZOS)
 
@@ -881,6 +885,28 @@ def create_app():
                 logo_pos = ((img.size[0] - logo_size[0]) // 2, (img.size[1] - logo_size[1]) // 2)
                 img.paste(logo, logo_pos, logo)
 
+                # Add text above and below the QR code
+                draw = ImageDraw.Draw(img)
+                font = ImageFont.truetype(font_path, font_size)  # Use the custom font and size
+
+                # Text to add
+                top_text = "F O R   S A L E !"
+                bottom_text = "M O R E  I N F O"
+
+                # Calculate text size and position
+                top_text_bbox = draw.textbbox((0, 0), top_text, font=font)
+                bottom_text_bbox = draw.textbbox((0, 0), bottom_text, font=font)
+                top_text_width = top_text_bbox[2] - top_text_bbox[0]
+                top_text_height = top_text_bbox[3] - top_text_bbox[1]
+                bottom_text_width = bottom_text_bbox[2] - bottom_text_bbox[0]
+                bottom_text_height = bottom_text_bbox[3] - bottom_text_bbox[1]
+
+                # Add top text
+                draw.text(((img.size[0] - top_text_width) / 2, 0), top_text, fill="black", font=font)
+                # Add bottom text
+                draw.text(((img.size[0] - bottom_text_width) / 2, img.size[1] - bottom_text_height - 20), bottom_text, fill="black", font=font)
+
+                # Save the final image with the QR code and text
                 buffered = BytesIO()
                 img.save(buffered, format="PNG")
                 qr_code_data = buffered.getvalue()
