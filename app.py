@@ -1322,7 +1322,6 @@ def create_app():
     
 
     @app.route("/bought-projects", methods=["GET"])
-    @requires_auth
     def get_bought_projects():
         return render_template("index.html")
 
