@@ -1067,6 +1067,7 @@ def create_app():
     @requires_auth
     def get_project(project_id):
         user_id = request.user.get('sub')  # Extract user_id from token
+        user_email = request.headers.get('User-Email')#УДАЛИТЬ НАХУЙ!!!
 
         try:
             project_id = ObjectId(project_id)
@@ -1078,8 +1079,9 @@ def create_app():
             return jsonify({"status": "error", "message": "Project not found"}), 404
         
         # Check if the user is in the access_list
-        if user_id not in project_vitrine.get("access_list", []):
-            return jsonify({"status": "error", "message": "Access denied"}), 403
+        access_list = project_vitrine.get("access_list", [])
+        if user_id not in access_list and user_email not in access_list:
+            return jsonify({"status": "error", "message": "Access denied"}), 403#УДАЛИТЬ НАХУЙ!!!
 
         project = app.db.projects.find_one({"_id": project_id})
         if not project:
