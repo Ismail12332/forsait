@@ -1100,12 +1100,12 @@ def create_app():
         user_email = request.user.get('email')
         project_id = ObjectId(project_id)
 
-        if user_id in project.get("access_list", []): #удалить нахуй
-            return jsonify({"access": True}), 200
-
         project = app.db.vitrine.find_one({"project_id": project_id})
         if not project:
             return jsonify({"message": "Project not found"}), 404
+        
+        if user_email in project.get("access_list", []):
+            return jsonify({"access": True}), 200
 
         if user_id in project.get("access_list", []):
             return jsonify({"access": True}), 200
