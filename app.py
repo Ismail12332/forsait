@@ -1097,7 +1097,7 @@ def create_app():
     @requires_auth
     def check_access(project_id):
         user_id = request.user.get('sub')  # Extract user_id from token
-        user_email = request.user.get('email')
+        user_email = request.headers.get('User-Email')#УДАЛИТЬ НАХУЙ!!!
         project_id = ObjectId(project_id)
 
         project = app.db.vitrine.find_one({"project_id": project_id})
